@@ -1,4 +1,5 @@
 # CSO Modell
+Masterarbeit zur Implementierung des CSO-Abflussmodells beschrieben in Quaranta et al. 2022 in R zur Nutzung in der Stoffeintragsmodellierung.
 
 
 

@@ -9,9 +9,7 @@ Authors@R: c(
       role = c("aut", "cre")
     )
   )
-Description: nkcso calculats a hydrological model which aims to calculate out 
-of precipitation, area and population data of a Functional Urban Area (FUA) the 
-volume of Combined Sewer Overflows (CSOs). 
+Description: nkcso calculats a hydrological model which aims to calculate out of precipitation, area and population data of a Functional Urban Area (FUA) the volume of Combined Sewer Overflows (CSOs). 
 License: GPL-3
 Encoding: UTF-8
 LazyData: true

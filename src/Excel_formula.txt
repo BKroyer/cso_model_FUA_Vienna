@@ -1,0 +1,44 @@
+=MAX(0;
+scenario_d: 0
+scenario_a: A-B/k1*(1-EXP(-k1));
+scenario_b: A*(1-(1+LN(A/B))/k1)+B/k1*EXP(-k1)
+scenario_c: A*(1+LN(B/A)/k1)-B/k1
+)
+
+=MAX(0;
+IF(scenario == d){0}
+ELSE IF(scenario == a) {(A)-(B)/k1*(1-EXP(-k1))}
+ELSE {A *(scenario_b*(1-(1 + LN(A/B))/k1) + scenario_c * (1 + LN(B/A)) / k1) -B/k1*(-scenario_b * EXP(-k1) + scenario_c))
+
+=MAX(0;
+scenario_d: 0
+scenario_a: A-B/k1*(1-EXP(-k1))
+scenario_b: A *(1-(1 + LN(A/B)) / k1) - B/k1*(-1 * EXP(-k1)))
+scenario_c: A *(1 + LN(B/A)) / k1) - B/k1
+
+
+Virtual volume d
+=(Runoff[t] + Qdwf)/k2 * (1 - EXP(-k2))
+-(Runoff[t] + Qdwf - F[t-1]) / (k2-k1) * (EXP(-k1) - EXP(-k2))
++ tank_volume[t-1] * EXP(-k2)
+
+virtual volume W*(t1), case b
+=(R[t] + Qdwf)/ k2 * (1-EXP(-k2 * tau[t]))
+- (R[t] + Qdwf - network_flow[t-1])/(k2 - k1)*(EXP(-k1 * tau[t])-EXP(-k2 * tau[t]))+
+tank_volume * EXP(-k2 * tau[t])
+
+tau 2=
+WENN(((k1*W1-tank_volume[t-1]*k2)/(k1*W1-k2*W2))>0;
+MAX(0; MIN(1;
+LN((k1*W1-tank_volume[t-1]*k2)/(k1*W1-k2*W2))/k2));
+0)
+
+Tau 2'
+=MAX(0;MIN(1;
+WENN(tank_volume[t-1]=W2;
+WENN(virtual_volume_d[t]>=W2;0;
+(tank_volume[t-1]-W2)/(tank_volume[t-1]-virtual_volume_d[t]));
+WENN(tank_volume[t-1]=virtual_volume_d[t];1;
+WENN(virtual_volume_d[t]>=W2;
+(tank_volume[t-1]-W2)/(tank_volume[t-1]-virtual_volume_d[t]);
+1)))))

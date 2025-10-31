@@ -4,8 +4,7 @@ library(ProjectTemplate)
 load.project()
 
 # Define area of interest to which (adding a 10 km tolerance) all raster are cropped and stored
-# area_of_interest <- vect("Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp")
-area_of_interest <- vect("C:/Users/PC User/OneDrive/STUDIUM/Masterarbeit/data/catchment_units/catchment_units.shp")
+area_of_interest <- vect("Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp")
 
 # Give Time period of interest:
 date_begin <- "2010-12-15"

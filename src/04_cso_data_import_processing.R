@@ -19,8 +19,9 @@ load.project()
 
 library(readxl)
 library(ggplot2)
-validation_data <- read_excel("D:/Nextcloud/Daten_SK/Studienarbeiten/Nina Kleemeyer/Data_Quaranta_et_al/1-s2.0-S2214581822000933-mmc2_corrected_SK.xlsx", sheet = 3)
-validation_param <- read_excel("D:/Nextcloud/Daten_SK/Studienarbeiten/Nina Kleemeyer/Data_Quaranta_et_al/1-s2.0-S2214581822000933-mmc2_corrected_SK.xlsx", sheet = 2)
+mmc2_path <- file.path(path_intermediate_res, "1-s2.0-S2214581822000933-mmc2_corrected_SK.xlsx")
+validation_data <- read_excel(mmc2_path, sheet = 3)
+validation_param <- read_excel(mmc2_path, sheet = 2)
 
 
 setDT(validation_data)
@@ -46,6 +47,7 @@ identical(orig, mod)
 compare_data <- data.table(orig = round(orig, 3), mod = round(mod, 3))
 compare_data[, identical:= orig == mod]
 identical(compare_data$orig, compare_data$mod)
+
 ggplot(compare_data, aes(x = orig, y = mod)) +
   geom_point() +
   geom_abline(slope = 1, intercept = 0)

@@ -4,7 +4,7 @@ library(ProjectTemplate)
 load.project()
 
 # Define area of interest to which (adding a 10 km tolerance) all raster are cropped and stored
-area_of_interest <- vect("Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp")
+area_of_interest <- vect("C:/Users/PC User/OneDrive/STUDIUM/Masterarbeit/data/catchment_units/catchment_units.shp")
 
 # prepare area of interest
 aoi_dissolved <- aggregate(area_of_interest)
@@ -12,7 +12,6 @@ aoi_epsg3035 <- project(aoi_dissolved, "EPSG:3035")
 writeVector(aoi_epsg3035, "data/intermediate_results/aoi_epsg3035.gpkg", overwrite = TRUE)
 
 # Define input data
-# Precipitation data need to be already downloaded and cropped to the area of interest in the folder /data/nc_cropped
 # Settlements
 settlements <- vect("Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp")
 settlements_id <- "gridcode"
@@ -24,7 +23,9 @@ writeVector(urb, file.path(path_intermediate_res, "settlements_cropped_epsg3035.
 urb_area <- expanse(urb, unit = "km")
 
 # Impervious area
-imp_input <- rast("Q:/GIS-Daten/Europe/Copernicus_HRL_imperviousness/DATA/IMD_2018_010m_eu_03035_V2_0.tif")
+#imp_input <- rast("Q:/GIS-Daten/Europe/Copernicus_HRL_imperviousness/DATA/IMD_2018_010m_eu_03035_V2_0.tif")
+# 2018 used before, ready to download, using 2015 for now; paper used 2015
+imp_input <- rast("C:/Users/PC User/OneDrive/STUDIUM/Masterarbeit/data/copernicus_impervious_20m_2015/IMD_2015_20m_eu_03035_d05_full.tif")
 urb_proj_imp <- project(urb, imp_input)
 imp_urb <- exact_extract(imp_input, sf::st_as_sf(urb_proj_imp), fun = "mean", append_cols = settlements_id)
 imp <- data.table(settlement_id = imp_urb$gridcode, mean_imperviousness = imp_urb$mean/100, settlement_area = urb_area)
@@ -32,7 +33,8 @@ imp[, imp_area_km2 := settlement_area * mean_imperviousness]
 saveRDS(imp[,.(settlement_id, imp_area_km2)], file.path(path_intermediate_res, "impervious_area.rds"))
 
 # population density
-popdens_raw <- rast("Q:/GIS-Daten/Europe/Population_density/EUROSTAT_GISCO_popdens_grid_2021/Eurostat_Census-GRID_2021_V2.2/ESTAT_OBS-VALUE-T_2021_V2.tiff")
+popdens_raw <- rast("C:/Users/PC User/OneDrive/STUDIUM/Masterarbeit/data/Eurostat_Census-GRID_2021_V2.2/ESTAT_OBS-VALUE-T_2021_V2.tiff") # T means total population
+#C:\Users\PC User\OneDrive\STUDIUM\Masterarbeit\data\Eurostat_Census-GRID_2021_V2.2
 urb_proj_pop <- project(urb, popdens_raw)
 pop_urb <- exact_extract(popdens_raw, sf::st_as_sf(urb_proj_pop), fun = "sum", append_cols = settlements_id)
 pop <- data.table(settlement_id = pop_urb$gridcode, population = pop_urb$sum )

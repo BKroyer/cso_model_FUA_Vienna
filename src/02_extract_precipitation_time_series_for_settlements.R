@@ -10,7 +10,7 @@ settlements <- vect("Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglo
 settlements_id <- "gridcode"
 
 # Define area of interest to which all geo data are cropped for faster processing
-# area_of_interest <- vect("Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp")
+# area_of_interest <- vect("Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp") # should work on simulation
 area_of_interest <- vect("C:/Users/PC User/OneDrive/STUDIUM/Masterarbeit/data/catchment_units/catchment_units.shp")
 
 # Preprocess geo data

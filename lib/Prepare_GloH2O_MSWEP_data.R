@@ -41,7 +41,7 @@ load_and_crop_nc_files <- function(file_row, area_of_interest, overwrite = FALSE
             drive_download(as_id(file_id), path = file_path, overwrite = TRUE)
             r <- rast(file_path)
             if (crs(r) != "EPSG:4326") {r <- project(r, "EPSG:4326")}
-            r_croped <- crop(r, aoi_buffered_epsg4326)
+            r_croped <- crop(r, area_of_interest)
             time_step <- as.POSIXlt(file_name, format = "%Y%j.%H.nc", tz = "GMT")
             time(r_croped) <- time_step
             writeCDF(r_croped, file_path_out, overwrite =TRUE)

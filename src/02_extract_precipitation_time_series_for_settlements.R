@@ -3,24 +3,6 @@
 library(ProjectTemplate)
 load.project()
 
-# Define input data
-# Precipitation data need to be already downloaded and cropped to the area of interest in the folder /data/nc_cropped
-# Settlements
-settlements <- vect("Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp")
-settlements_id <- "gridcode"
-
-# Define area of interest to which all geo data are cropped for faster processing
-area_of_interest <- vect("Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp")
-
-# Preprocess geo data
-# prepare area of interest
-aoi_dissolved <- aggregate(area_of_interest)
-aoi_epsg4326 <- project(aoi_dissolved, "EPSG:4326")
-# settlements_epsg4326 <- project(settlements, "EPSG:4326")
-# urb <- crop(settlements_epsg4326, aoi_epsg4326)
-# writeVector(urb, "data/intermediate_results/settlements_cropped_epsg4326.gpkg", overwrite = TRUE)
-urb <- vect("data/intermediate_results/settlements_cropped_epsg4326.gpkg")
-
 # load the NetCDF files
 nc_files_cropped <- list.files(path_cropped_nc, pattern = "\\.nc$", full.names = TRUE)
 #nc_files_cropped[, timestep := as.POSIXct()]
@@ -31,10 +13,9 @@ precip_rast_attributes <- data.table(time_steps = as.POSIXct(time(precip_rast)),
 precip_rast_attributes[, duplicates := duplicated(names)]
 
 
-
 # extract the precipitation for all settlements:
 terra::gdalCache(30000)
-precip_urb <- exact_extract(precip_rast, sf::st_as_sf(urb), fun = "mean", append_cols = settlements_id, stack_apply = TRUE)
+precip_urb <- exact_extract(precip_rast, sf::st_as_sf(urb_4326), fun = "mean", append_cols = settlements_id, stack_apply = TRUE)
 # alternative with terra function. Less precise and very slow.
 # precip_urb <- extract(precip_rast, urb, fun = mean, ID = TRUE, na.rm = TRUE)
 setDT(precip_urb)

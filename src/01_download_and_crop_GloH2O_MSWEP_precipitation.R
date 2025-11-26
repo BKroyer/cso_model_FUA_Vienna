@@ -3,25 +3,15 @@
 library(ProjectTemplate)
 load.project()
 
-# Define area of interest to which (adding a 10 km tolerance) all raster are cropped and stored
-area_of_interest <- vect("Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp")
+# area of interest from setup
 
-# Give Time period of interest:
-date_begin <- "2010-12-15"
-date_end <- "2020-12-31"
+## Precipitation data
 
 # Authenticate for googledrive and allow gargle to access googledrive.
 googledrive::drive_auth()
 
 # For very small data amounts you can use
 googledrive::drive_user()
-
-
-# prepare area of interest
-aoi_dissolved <- aggregate(area_of_interest)
-aoi_buffered <- buffer(aoi_dissolved, 10000) # Fix potential geometry issues and create buffer 10 km
-aoi_buffered_epsg4326 <- project(aoi_buffered, "EPSG:4326")
-writeVector(aoi_buffered_epsg4326, "data/intermediate_results/aoi_buffered_epsg4326.gpkg", overwrite = TRUE)
 
 
 # Decide for GloH20 MSWEP product. From the GloH2O FAQ:
@@ -38,7 +28,7 @@ file_list <- identify_needed_nc_files(begin_date = date_begin,
 
 setDT(file_list)  # convert dribble to data.table
 # Be carefull, you can only download a file several times from googledrive, afterwards its blocked for ~24 h
-file_list[, load_and_crop_nc_files(.SD, area_of_interest = extent_aoi_epsg4326), by = seq_len(nrow(file_list))]
+file_list[, load_and_crop_nc_files(.SD, area_of_interest = aoi_buffered_epsg4326), by = seq_len(nrow(file_list))]
 #drive_deauth()
 
 # File 2011273.03.nc is damaged and cannot be processed. Replace with previous timestamp:

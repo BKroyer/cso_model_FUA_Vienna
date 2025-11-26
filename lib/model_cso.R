@@ -244,7 +244,7 @@ cso_model <- function(
              "virtual_volume_b",
              "virtual_volume_c",
              "tank_volume_W") := fun_virtual_volume_and_tank_volume(runoff, network_flow, tau1, rate_constant_tank_storage, qdwf, rate_constant_network_storage,
-                                                                  network_storage, network_storage_mult_rate, tank_volume_init, scenario)]
+                                                                  network_storage, network_storage_mult_rate, tank_storage, scenario)]
 
 
     ### tau2 ### equation 11 in appendix B

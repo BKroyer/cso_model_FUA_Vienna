@@ -47,6 +47,7 @@ precipitation <- data_innsbruck$P#[mask]
 innsbruck_time <- data_innsbruck$DateValue#[mask]
 
 # try innsbruck
+area <- 9.15
 mod_res <- cso_model(population = 165000,
                      area = 9.15,
                      share_served_by_CS = 1,
@@ -61,42 +62,121 @@ mod_res <- cso_model(population = 165000,
                      time = innsbruck_time,
                      precipitation = precipitation) #validation_data$P
 
-validation_data <- data_innsbruck
-orig <- validation_data$`Network overflow E't`
-mod <- mod_res$network_overflow
 
+
+## get right cols from validation and modelled data
+get_cols <- function(var_nam, data){
+    nam <- names(data)[grepl(tolower(var_nam), tolower(names(data))) & grepl("overflow", tolower(names(data)))]
+    if (length(nam) != 1){
+        print(nam)
+        index <- readline(prompt = "More than one column found, input the correct index:")
+        nam <- nam[as.integer(index)]
+    }
+    return(data[[nam]])
+}
+
+## create and save plots
+plot_compare_data <- function(var_nam, compare_data, path_out){
+    # mod vs orig
+    lim_min <- 0
+    lim_max <- ceiling(max(c(compare_data$mod, compare_data$orig), na.rm=T))
+    ggsave(
+        file.path(path_out, paste0(var_nam, "_mod_vs_orig_scatter.pdf")),
+        ggplot(compare_data, aes(x = orig, y = mod, color = scenario)) +
+            geom_point(alpha = 0.5, size = 4) +
+            geom_abline(slope = 1, intercept = 0) +
+            xlab(paste0("original ",var_nam," in mm (Excel)")) +
+            ylab(paste0("modeled ",var_nam," in mm (R)")) +
+            scale_x_continuous(breaks = seq(lim_min, lim_max, 1), limits = c(lim_min, lim_max)) +
+            scale_y_continuous(breaks = seq(lim_min, lim_max, 1), limits = c(lim_min, lim_max)) +
+            theme_bw(),
+        width = 8,
+        height = 6
+    )
+
+    # mod-orig
+    compare_data[, diff_to_orig := mod - orig]
+    ggsave(
+        file.path(path_out, paste0(var_nam, "_diff_mod_minus_orig.pdf")),
+        ggplot(compare_data, aes(x = time, y = diff_to_orig, color = scenario)) +
+            geom_point(alpha = 0.5, size = 4) +
+            ylab(paste0("modeled minus original ", var_nam)) +
+            xlab("") +
+            scale_x_datetime(date_breaks = "1 year", date_labels = "%Y") +
+            theme_bw(),
+        width = 9,
+        height = 7
+    )
+}
+
+
+process_and_plot_results <- function(mod_res, validation_data, mask, path_out, time_step = 3, round_to = 4){
+    #' @param mod_res the model result data frame (output of model_cso)
+    #' @param validation_data data frame with same timestep as mod_res and columns for network and tank overflow
+    #' @param mask the row indices to consider in mean and total computation
+    #' @param path_out path to save the plots to
+    #' @param time_step the time step in hours, default is 3
+    #' @param round_to the digits to round results to, default is 4
+    #'
+    #' @returns print of results, saves plots and table results
+
+
+    ## TANK
+    var_nam <- "tank"
+    # get the right columns
+    tank_mod <- get_cols(var_nam, mod_res)
+    tank_orig <- get_cols(var_nam, validation_data)
+    tank_compare_data <- data.table(time = mod_res$time, orig = tank_orig, mod = tank_mod, scenario = mod_res$scenario)
+    # annual mean overflows
+    annual_mean_tank <- mean(tank_mod[mask], na.rm=T) * (24/as.integer(time_step)) * 365
+    annual_mean_tank_orig <- mean(tank_orig[mask], na.rm=T) * (24/as.integer(time_step)) * 365
+    # plot
+    plot_compare_data(var_nam, tank_compare_data, path_out)
+
+
+    ## NETWORK
+    var_nam <- "network"
+    # get the right columns
+    network_mod <- get_cols(var_nam, mod_res)
+    network_orig <- get_cols(var_nam, validation_data)
+    network_compare_data <- data.table(time = mod_res$time, orig = network_orig, mod = network_mod, scenario = mod_res$scenario)
+    # annual mean overflows
+    annual_mean_network <- mean(network_mod[mask], na.rm=T) * (24/as.integer(time_step)) * 365
+    annual_mean_network_orig <- mean(network_orig[mask], na.rm=T) * (24/as.integer(time_step)) * 365
+    # plot
+    plot_compare_data(var_nam, network_compare_data, path_out)
+
+
+    # total overflow in Mm³/year respecting the mask
+    total_overflow <- annual_mean_tank + annual_mean_network
+    total_overflow_Mm3y <- total_overflow * area / 1000 # total overflow in million m³ per year for entire study area
+    total_overflow_Mm3y_orig <- (annual_mean_network_orig + annual_mean_tank_orig) * area / 1000
+
+    print(paste0("the modeled network overflow is: ", round(annual_mean_network, round_to), " mm/y/m² (vs. validation: ", round(annual_mean_network_orig, round_to)," mm/y/m²)"))
+    print(paste0("the modeled tank overflow is: ", round(annual_mean_tank, round_to), " mm/y/m² (vs. validation: ", round(annual_mean_tank_orig, round_to)," mm/y/m²)"))
+    print(paste0("the modeled total overflow is: ", round(total_overflow_Mm3y, round_to), " Mm³/y (vs. validation: ", round(total_overflow_Mm3y_orig, round_to), " Mm³/y)"))
+
+
+
+    # save print result in tables
+
+
+
+
+
+}
+
+
+
+validation_data <- data_innsbruck
 # Innsbruck starts validation at timestep 4 (4:46735) --> here 3 to 46734
 # 1.1.2001 6:00 to 29.12.2016 15:00
-
-### CHANGE TO FULL DATA
-
-## compute Mm³/year
-orig_total_overflow_Mm3_y <- mean(validation_data$`Network overflow E't` + validation_data$`Tank overflow E''t`, na.rm=T) * 8 * 365
-
-
-#orig <- validation_data$`Tank overflow E''t`
-#mod <- mod_res$tank_overflow
-#identical(orig, mod)
-#compare_data <- data.table(orig = round(orig, 3), mod = round(mod, 3))
-compare_data <- data.table(orig = orig, mod = mod, scenario = mod_res$scenario)
-#compare_data[, identical:= orig == mod]
-#identical(compare_data$orig, compare_data$mod)
-
-ggplot(compare_data, aes(x = orig, y = mod, color = scenario)) +
-    geom_point() +
-    geom_abline(slope = 1, intercept = 0) +
-    theme_bw()
-
-mod_res$diff_to_orig <- mod - orig
-ggplot(mod_res, aes(x = time, y = diff_to_orig, color = scenario)) +
-    geom_point(alpha = 0.6) +
-    #geom_line() +
-    theme_bw()
-
-# annual mean overflows # in Excel they exclude the first two values (Innsbruck 3 to 46734)
 mask <- 3:46754
-mean(mod_res$tank_overflow[mask], na.rm=T) * 8 * 365 # 74.47652 (vs Excel: 74.47651)
-mean(mod_res$network_overflow[mask], na.rm=T) * 8 * 365 # 21.81888 (vs Excel: 21.6777); becomes 15.78918 if B/A for case b!!!!!!
+results_nam <- "Innsbruck_Nov26"
+path_out <- file.path(path_intermediate_res, results_nam)
+
+process_and_plot_results(mod_res, validation_data, mask, path_out)
+
 
 
 

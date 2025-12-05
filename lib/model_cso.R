@@ -7,14 +7,15 @@
 ##########################################################################################################
 
 cso_model <- function(
-    population,                         # numeric. Population of the catchment area. Must be > 0.
-    area,                               # numeric impervious catchment area in km². Must be > 0.
+    population = NA,                    # numeric. Population of the catchment area. Must be > 0. If not given, pop_density must be given.
+    area = NA,                          # numeric impervious catchment area in km². Must be > 0. If not given, pop_density must be given.
     pop_density = NA,                   # population density in persons per km² impervious area served by CS. If missing is calculated from impervious area, population and share_served_by_CS.
-    share_served_by_CS,                 # share of population served by CS. According to Quaranta et al. (2022) mostly as the national average
+    share_served_by_CS = NA,            # share of population served by CS. According to Quaranta et al. (2022) mostly as the national average. If not given, pop_density must be given.
     time,                               # vector containing the timestamps as posixct datatype.
     precipitation,                      # numeric. vector containing precipitation per timestep [mm].
     max_item = NA,                      # option to subset data, integer of maximum item index to be used, e.g. 100 for first 100 time steps
-    dwf_per_capita = 0.2,               # gDry Weather Flow (DWF) per capita [m³/day/person]. Default: 0.2 m³/day/person (Quaranta et al. 2022).
+    dwf_per_capita = 0.2,               # Dry Weather Flow (DWF) per capita [m³/day/person]. Default: 0.2 m³/day/person (Quaranta et al. 2022).
+    qdwf = NA,                          # The DWF in mm/timestep for entire area and population
     catchment_surface_storage = 1.5,    # W0 Maximum surface storage capacity of the catchment (water retained on impervious surfaces
                                         # before runoff begins) [mm]. Default: 1.5 mm (Quaranta et al. 2022)
     rate_constant_surface_storage = 0.3,# k0 Reservoir constant for surface storage [1/timestep].Default: 0.3/(3 hours) (represents depletion of surface storage during dry periods).
@@ -30,26 +31,35 @@ cso_model <- function(
 
     ## Check input data type
     require(checkmate)
-    assert_count(population)
-    assert_number(area, na.ok = FALSE, lower = 0, finite = TRUE)
-    if (!(area > 0)) stop(sprintf("area must be > 0, but is %s", area))
+    if (!is.na(population)) assert_count(population)
+    assert_number(area, na.ok = TRUE, lower = 0, finite = TRUE)
+    if (!is.na(area) & !(area > 0)) stop(sprintf("area must be > 0, but is %s", area))
     assert_posixct(time, any.missing = FALSE, min.len = 8, unique = TRUE, null.ok = FALSE, sorted = TRUE)
     assert_numeric(precipitation, lower = 0, finite = TRUE, any.missing = FALSE, all.missing = FALSE, min.len = 8)
     if (!is.na(pop_density)) assert_numeric(pop_density, lower = 0, finite = TRUE, any.missing = FALSE, all.missing = TRUE)
     assert_number(dwf_per_capita, na.ok = FALSE, lower = 0.05, upper = 2,  null.ok = FALSE)
     assert_number(catchment_surface_storage, na.ok = FALSE, lower = 0.2, upper = 5,  null.ok = FALSE)
     assert_number(rate_constant_surface_storage, na.ok = FALSE, lower = 0.05, upper = 2,  null.ok = FALSE)
-    assert_number(network_dwf_dilution_rate, na.ok = FALSE, lower = 3, upper = 25,  null.ok = FALSE) # max was 20
-    assert_number(tank_dwf_dilution_rate, na.ok = FALSE, lower = 3, upper = 24,  null.ok = FALSE) # max was 20
-    assert_number(network_storage, na.ok = FALSE, lower = 0.05, upper = 5,  null.ok = FALSE)
+    assert_number(network_dwf_dilution_rate, na.ok = FALSE, lower = 3, upper = 40,  null.ok = FALSE) # max was 20; stuttgart is 40
+    assert_number(tank_dwf_dilution_rate, na.ok = FALSE, lower = 1.5, upper = 24,  null.ok = FALSE) # max was 20; min was 3 Santiago says 1.5
+    assert_number(network_storage, na.ok = FALSE, lower = 0.05, upper = 13,  null.ok = FALSE) # max was 5, Ecully says 13
     assert_number(tank_storage, na.ok = FALSE, lower = 0.05, upper = 7,  null.ok = FALSE) # max was 5
 
     ### basic parameter calculation
     time_step <- min(diff(time))
     timesteps_per_day <- 24/as.integer(time_step)
+    if ((is.na(area) | is.na(population) | is.na(share_served_by_CS)) & is.na(pop_density)){
+        errorCondition("Either population density [cap/km²_imp] or all of population [cap], area [km²] and share_served_by_CS [-] must be given.")
+    }
     if(is.na(pop_density)){
         pop_density <- population / (area * share_served_by_CS)} # Personen/km²_imp (as km² imp served by CS) # in Excel often ha used as unit, factor 1/100
-    qdwf <- pop_density * dwf_per_capita / timesteps_per_day / 1000 # mm/timestep; factor 1000 as area supposedly given in km², not ha
+    if (is.na(qdwf)){
+        if (is.na(pop_density) | is.na(dwf_per_capita)){
+            errorCondition("Either qdwf or all of pop_density and dwf_per_capita must be given (or possible to calculate).")
+        }
+        qdwf <- pop_density * dwf_per_capita / timesteps_per_day / 1000 # mm/timestep; factor 1000 as area supposedly given in km², not ha
+    }
+
     rate_constant_network_storage <- network_dwf_dilution_rate * qdwf / network_storage # Netzwerkspeicher Rate ((timestep)-1) (k1)
     k1 <- rate_constant_network_storage
 
@@ -57,8 +67,34 @@ cso_model <- function(
 
     rate_constant_tank_storage <- tank_dwf_dilution_rate * qdwf / tank_storage # Tank Rate ((timestep)-1) (k2)
     k2 <- rate_constant_tank_storage
+
+
     network_max_conveyance <- qdwf * network_dwf_dilution_rate # 12.75098313 # Maximum conveyance of the network (mm/timestep/m²) according to Pistocci and Dorati 2018
     network_storage_mult_rate <- network_storage * rate_constant_network_storage # Maximum conveyance of the network k1*W1
+
+
+    # try different k1 for Stuttgart
+    #k1 <- 0.3
+    #rate_constant_tank_storage <- k1
+    #k2 <- 1.2
+    #rate_constant_tank_storage <- k2
+
+    print(paste0("k0 is ", rate_constant_surface_storage, " 1/timestep"))
+    print(paste0("k1 is ", k1, " 1/timestep"))
+    print(paste0("k2 is ", k2, " 1/timestep"))
+
+    print(paste0("W0 is ", catchment_surface_storage, " mm"))
+    print(paste0("W1 is ", network_storage, " mm"))
+    print(paste0("W2 is ", tank_storage, " mm"))
+
+    print(paste0("dt is ", tank_dwf_dilution_rate, ""))
+    print(paste0("dn is ", network_dwf_dilution_rate, ""))
+
+    print(paste0("qdwf is ", qdwf))
+    print(paste0("time step is ", time_step," hours"))
+    print(paste0("the population density is ", pop_density, " cap/km²_imp"))
+
+
 
     # Create model dat object
     require(data.table)
@@ -67,6 +103,12 @@ cso_model <- function(
     }else{
         data <- data.table(time = time[1:max_item], precipitation = precipitation[1:max_item], key = "time")
     }
+
+    print(paste0("The mean annual precipitation is ",mean(data$precipitation, na.rm=T) * 8 * 365," mm/year"))
+
+    # save area (the impervious one!) to data for validation purposes later
+    data[, area := area * share_served_by_CS]
+
 
     ### Surface Storage S(t) ### Equation 1
     v <- numeric(length(precipitation))
@@ -91,6 +133,12 @@ cso_model <- function(
     for (t in 2:nrow(data)) {
         v[t] <- (data$runoff[t] + qdwf) * (1 - exp(-rate_constant_network_storage)) +
             v[t - 1] * exp(-rate_constant_network_storage)
+
+    # Barcelona
+    # for (t in 2:nrow(data)) {
+    #     v[t] <- (data$runoff[t] + qdwf)
+
+
     }
     data[, network_flow := v]
 
@@ -141,13 +189,14 @@ cso_model <- function(
             A - B / k1 * (1 - exp(-k1)),
 
             # scenario b:
-            ## ln(A/B) in the Excel files, I think B/A is correct, but left at A/B for now to be able to compare
-            # scenario == "b",
-            # A * (1 - (1 + log(safe_ratio)) / k1) +
-            #     B / k1 * exp(-k1),
+            ## ln(A/B) in the Excel files, I think B/A is correct, but set to A/B to compare to Excel
             scenario == "b",
-            A * (1 - (1 + log(safe_ratio_A_B)) / k1) +
+            A * (1 - (1 + log(safe_ratio)) / k1) +
                 B / k1 * exp(-k1),
+
+            # scenario == "b",
+            # A * (1 - (1 + log(safe_ratio_A_B)) / k1) +
+            #     B / k1 * exp(-k1),
 
             # scenario c:
             scenario == "c",
@@ -250,9 +299,9 @@ cso_model <- function(
     ### tau2 ### equation 11 in appendix B
     data[, part1 := rate_constant_network_storage * network_storage - rate_constant_tank_storage * shift(tank_volume_W)]
     data[, part2 := rate_constant_network_storage * network_storage - rate_constant_tank_storage * tank_storage]
-    data[, tau2 :=  fifelse(part2 != 0 & part1 > 0, pmax(0, pmin(1, log(part1/part2) / rate_constant_tank_storage)), 0)]
+    data[, tau2 :=  fifelse((part2 != 0 & (part1/part2) > 0), pmax(0, pmin(1, log(part1/part2) / rate_constant_tank_storage)), 0)]
 
-    data[, c("part1", "part2") := NULL] # not needed further
+    # data[, c("part1", "part2") := NULL] # not needed further
 
 
     ### Ea(t) ### Equation 12 in appendix B
@@ -304,11 +353,16 @@ cso_model <- function(
 
     ### Eb ###
     data[, Eb := # maybe change this to a safe_ratio in log if warnings annoying
-             (runoff + qdwf - rate_constant_tank_storage * tank_storage) * (tau1 - t2_2) + (runoff + qdwf - shift(network_flow)) / rate_constant_network_storage *
-             (exp(-rate_constant_network_storage * tau1) - exp(-rate_constant_network_storage * t2_2)) +
-             (network_storage * rate_constant_network_storage - rate_constant_tank_storage * tank_storage) *
-             (1 - pmin(1, tau1 + pmax(0, log((network_storage * rate_constant_network_storage - virtual_volume_b_t1 * rate_constant_tank_storage) / # tau1 capped at 1 here
-                                                 (network_storage * rate_constant_network_storage - rate_constant_tank_storage * tank_storage)) / rate_constant_tank_storage)))]
+             fifelse(
+                 ((network_storage * rate_constant_network_storage - rate_constant_tank_storage * tank_storage) != 0 & ((network_storage * rate_constant_network_storage - virtual_volume_b_t1 * rate_constant_tank_storage)/(network_storage * rate_constant_network_storage - rate_constant_tank_storage * tank_storage)) > 0),
+                 (runoff + qdwf - rate_constant_tank_storage * tank_storage) * (tau1 - t2_2) + (runoff + qdwf - shift(network_flow)) / rate_constant_network_storage *
+                     (exp(-rate_constant_network_storage * tau1) - exp(-rate_constant_network_storage * t2_2)) +
+                     (network_storage * rate_constant_network_storage - rate_constant_tank_storage * tank_storage) *
+                     (1 - pmin(1, tau1 + pmax(0, log((network_storage * rate_constant_network_storage - virtual_volume_b_t1 * rate_constant_tank_storage) / # tau1 capped at 1 here
+                                                         (network_storage * rate_constant_network_storage - rate_constant_tank_storage * tank_storage)) / rate_constant_tank_storage))),
+                 0
+             )]
+
 
 
     ### t2_3 ### # implementation fits the Excel version and makes sense with the appendix

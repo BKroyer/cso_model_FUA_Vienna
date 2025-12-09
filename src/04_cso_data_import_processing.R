@@ -130,32 +130,32 @@ process_and_plot_results <- function(mod_res, validation_data, mask, path_out, t
 data_santi <- read_excel(file.path(path_intermediate_res, "model_prototype (3hourly)_Santiago_2.xlsx"), sheet = 2)
 precipitation <- data_santi$P
 time <- data_santi$DateValue
-mod_res <- cso_model(network_storage = 5,
+mod_res <- cso_model(W1 = 5,
                      population = 100000,
                      dwf_per_capita = 0.275,
                      area = 9.4,
                      share_served_by_CS = (390*0.8+550*0.2)/940, # share weighted mean by area
-                     rate_constant_surface_storage = 0.3,
-                     network_dwf_dilution_rate = 7,
-                     tank_storage = 2,
-                     tank_dwf_dilution_rate = 1.5,
-                     catchment_surface_storage = 1.5,
+                     k0 = 0.3,
+                     dn = 7,
+                     W2 = 2,
+                     dt = 1.5,
+                     W0 = 1.5,
                      time = time,
                      precipitation = precipitation)
 # LODZ2 ------------------------------------------------------------------------------------------------------------
 data_lodz2 <- read_excel(file.path(path_intermediate_res, "model_prototype (3hourly)_Lodz_2.xlsx"), sheet = 3)
 precipitation <- data_lodz2$P
 time <- data_lodz2$DateValue
-mod_res <- cso_model(network_storage = 5,
+mod_res <- cso_model(W1 = 5,
                      pop_density = 5600,
                      qdwf = 1.722287,
                      area = 17.14/0.3,
                      share_served_by_CS = 0.30,
-                     rate_constant_surface_storage = 0.3,
-                     network_dwf_dilution_rate = 7,
-                     tank_storage = 2,
-                     tank_dwf_dilution_rate = 3.6,
-                     catchment_surface_storage = 1.5,
+                     k0 = 0.3,
+                     dn = 7,
+                     W2 = 2,
+                     dt = 3.6,
+                     W0 = 1.5,
                      time = time,
                      precipitation = precipitation)
 # ECULLY ----------------------------------------------------------------------------------------------------------
@@ -165,16 +165,16 @@ precipitation <- data_ecully$P#[mask]
 time <- data_ecully$DateValue#[mask]
 
 
-mod_res <- cso_model(network_storage = 13,
+mod_res <- cso_model(W1 = 13,
                      pop_density = 5600,
                      qdwf = 0.44,
                      area = 64, # the impervious one
                      share_served_by_CS = 1, # not given, but to obtain correct area impervious
-                     rate_constant_surface_storage = 0.3,
-                     network_dwf_dilution_rate = 7,
-                     tank_storage = 2,
-                     tank_dwf_dilution_rate = 4,
-                     catchment_surface_storage = 1.5,
+                     k0 = 0.3,
+                     dn = 7,
+                     W2 = 2,
+                     dt = 4,
+                     W0 = 1.5,
                      dwf_per_capita = 0.231,
                      time = time,
                      precipitation = precipitation)
@@ -198,12 +198,12 @@ area <- 12
 mod_res <- cso_model(population = 200000,
                      area = 12,
                      share_served_by_CS = 0.75,
-                     network_storage = 5,
-                     rate_constant_surface_storage = 0.3,
-                     network_dwf_dilution_rate = 7,
-                     tank_storage = 6.1111111,
-                     tank_dwf_dilution_rate = 23.76, #as.numeric(validation_param[10, 5][[1]]),
-                     catchment_surface_storage = 1.5, # as.numeric(validation_param[10, 7][[1]]),
+                     W1 = 5,
+                     k0 = 0.3,
+                     dn = 7,
+                     W2 = 6.1111111,
+                     dt = 23.76, #as.numeric(validation_param[10, 5][[1]]),
+                     W0 = 1.5, # as.numeric(validation_param[10, 7][[1]]),
                      dwf_per_capita = 0.2,
                      time = barcelona_time,
                      precipitation = precipitation) #validation_data$P
@@ -220,12 +220,12 @@ mod_res <- cso_model(population = 165000,
                      area = 9.15,
                      share_served_by_CS = 1,
                      #pop_density = 222,
-                     network_storage = 2.99027, # input parameter, in Innsbruck calculated as 27361/ imp area in m² * 1000 --> the 27361 must be m³ of network volume
-                     rate_constant_surface_storage = 0.3,
-                     network_dwf_dilution_rate = 25, #as 5000/(qdwf*1000) so 5000/ Qdwf in L --> 5000 must be network volume in L
-                     tank_storage = 0.51366, # calculated from tank volume of 4700 m³ --> divided by the imp. area in m² and times 1000 to get to mm, 4700 m³ as the physical tank volume
-                     tank_dwf_dilution_rate = 11, # 2200/200; 200 L/day Qdwf so must be 2200 L/day as dilution reference volume
-                     catchment_surface_storage = 0.55738, #as 5100 / imp. area in m² times 1000 to get to mm --> 5100 m³ assumed in total on surface
+                     W1 = 2.99027, # input parameter, in Innsbruck calculated as 27361/ imp area in m² * 1000 --> the 27361 must be m³ of network volume
+                     k0 = 0.3,
+                     dn = 25, #as 5000/(qdwf*1000) so 5000/ Qdwf in L --> 5000 must be network volume in L
+                     W2 = 0.51366, # calculated from tank volume of 4700 m³ --> divided by the imp. area in m² and times 1000 to get to mm, 4700 m³ as the physical tank volume
+                     dt = 11, # 2200/200; 200 L/day Qdwf so must be 2200 L/day as dilution reference volume
+                     W0 = 0.55738, #as 5100 / imp. area in m² times 1000 to get to mm --> 5100 m³ assumed in total on surface
                      dwf_per_capita = 0.2,
                      time = innsbruck_time,
                      precipitation = precipitation) #validation_data$P
@@ -246,12 +246,12 @@ mod_res <- cso_model(population = 160000,
                      area = area,
                      share_served_by_CS = 0.5,
                      #pop_density = 222,
-                     network_storage = 5, # W1
-                     rate_constant_surface_storage = 0.3, # k0
-                     network_dwf_dilution_rate = 40, # Excel states 40, but uses different parameters later, cannot access those # dn
-                     tank_storage = 2, # W2
-                     tank_dwf_dilution_rate = 4, # dt
-                     catchment_surface_storage = 1.5, # W0
+                     W1 = 5, # W1
+                     k0 = 0.3, # k0
+                     dn = 40, # Excel states 40, but uses different parameters later, cannot access those # dn
+                     W2 = 2, # W2
+                     dt = 4, # dt
+                     W0 = 1.5, # W0
                      dwf_per_capita = qdwf_per_cap,
                      time = stuttgart_time,
                      precipitation = precipitation)
@@ -267,7 +267,7 @@ validation_data <- data_innsbruck
 #mask <- 37985:40904 # just 2014
 mask <- 3:46753
 #mask <- 31650:34577
-results_nam <- "Inssbruck_correct_eq_Dec5"
+results_nam <- "Innsbruck_testing_k1_k2"
 path_out <- file.path(path_intermediate_res, results_nam)
 
 process_and_plot_results(mod_res, validation_data, mask, path_out)

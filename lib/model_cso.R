@@ -16,17 +16,13 @@ cso_model <- function(
     max_item = NA,                      # option to subset data, integer of maximum item index to be used, e.g. 100 for first 100 time steps
     dwf_per_capita = 0.2,               # Dry Weather Flow (DWF) per capita [m³/day/person]. Default: 0.2 m³/day/person (Quaranta et al. 2022).
     qdwf = NA,                          # The DWF in mm/timestep for entire area and population
-    catchment_surface_storage = 1.5,    # W0 Maximum surface storage capacity of the catchment (water retained on impervious surfaces
+    W0 = 1.5,    # W0 Maximum surface storage capacity of the catchment (water retained on impervious surfaces
                                         # before runoff begins) [mm]. Default: 1.5 mm (Quaranta et al. 2022)
-    rate_constant_surface_storage = 0.3,# k0 Reservoir constant for surface storage [1/timestep].Default: 0.3/(3 hours) (represents depletion of surface storage during dry periods).
-    network_dwf_dilution_rate = 9.1,    # Dilution rate of the sewer network [-]. Defines the maximum network capacity relative to DWF. Default: 9.1.
-
-    # maybe delete again
-    network_max_capacity = NA,          # Maximum capacity of the network in L/(s * ha) = ... if known, then network flow capped. If unknown, no cap. Note that excess water is not accounted for in the CSO volumes yet.
-
-    tank_dwf_dilution_rate = 9,         # Dilution rate of the tank [-]. Defines the maximum tank outflow capacity relative to DWF. Default: 9.
-    network_storage = 1,                # Network storage capacity [mm]. Default: 1 mm (storage capacity of the sewer network before overflow).
-    tank_storage = 0.45                 # Tank storage capacity [mm]. Default: 0.45 mm (capacity of the retention tank before overflow).
+    k0 = 0.3,# k0 Reservoir constant for surface storage [1/timestep].Default: 0.3/(3 hours) (represents depletion of surface storage during dry periods).
+    dn = 9.1,    # Dilution rate of the sewer network [-]. Defines the maximum network capacity relative to DWF. Default: 9.1.
+    dt = 9,         # Dilution rate of the tank [-]. Defines the maximum tank outflow capacity relative to DWF. Default: 9.
+    W1 = 1,                # Network storage capacity [mm]. Default: 1 mm (storage capacity of the sewer network before overflow).
+    W2 = 0.45                 # Tank storage capacity [mm]. Default: 0.45 mm (capacity of the retention tank before overflow).
     ){
 
     ## Check input data type
@@ -38,12 +34,12 @@ cso_model <- function(
     assert_numeric(precipitation, lower = 0, finite = TRUE, any.missing = FALSE, all.missing = FALSE, min.len = 8)
     if (!is.na(pop_density)) assert_numeric(pop_density, lower = 0, finite = TRUE, any.missing = FALSE, all.missing = TRUE)
     assert_number(dwf_per_capita, na.ok = FALSE, lower = 0.05, upper = 2,  null.ok = FALSE)
-    assert_number(catchment_surface_storage, na.ok = FALSE, lower = 0.2, upper = 5,  null.ok = FALSE)
-    assert_number(rate_constant_surface_storage, na.ok = FALSE, lower = 0.05, upper = 2,  null.ok = FALSE)
-    assert_number(network_dwf_dilution_rate, na.ok = FALSE, lower = 3, upper = 40,  null.ok = FALSE) # max was 20; stuttgart is 40
-    assert_number(tank_dwf_dilution_rate, na.ok = FALSE, lower = 1.5, upper = 24,  null.ok = FALSE) # max was 20; min was 3 Santiago says 1.5
-    assert_number(network_storage, na.ok = FALSE, lower = 0.05, upper = 13,  null.ok = FALSE) # max was 5, Ecully says 13
-    assert_number(tank_storage, na.ok = FALSE, lower = 0.05, upper = 7,  null.ok = FALSE) # max was 5
+    assert_number(W0, na.ok = FALSE, lower = 0.2, upper = 5,  null.ok = FALSE)
+    assert_number(k0, na.ok = FALSE, lower = 0.05, upper = 2,  null.ok = FALSE)
+    assert_number(dn, na.ok = FALSE, lower = 3, upper = 40,  null.ok = FALSE) # max was 20; stuttgart is 40
+    assert_number(dt, na.ok = FALSE, lower = 1.5, upper = 24,  null.ok = FALSE) # max was 20; min was 3 Santiago says 1.5
+    assert_number(W1, na.ok = FALSE, lower = 0.05, upper = 13,  null.ok = FALSE) # max was 5, Ecully says 13
+    assert_number(W2, na.ok = FALSE, lower = 0.05, upper = 7,  null.ok = FALSE) # max was 5
 
     ### basic parameter calculation
     time_step <- min(diff(time))
@@ -60,35 +56,25 @@ cso_model <- function(
         qdwf <- pop_density * dwf_per_capita / timesteps_per_day / 1000 # mm/timestep; factor 1000 as area supposedly given in km², not ha
     }
 
-    rate_constant_network_storage <- network_dwf_dilution_rate * qdwf / network_storage # Netzwerkspeicher Rate ((timestep)-1) (k1)
-    k1 <- rate_constant_network_storage
+    k1 <- dn * qdwf / W1 # Netzwerkspeicher Rate ((timestep)-1) (k1)
+    k2 <- dt * qdwf / W2 # Tank Rate ((timestep)-1) (k2)
 
-    # tank_dwf_dilution_rate in Barcelona calculated via assumed maximum tank conveyance capacity of 11 m³/s
+    network_max_conveyance <- qdwf * dn # Maximum conveyance of the network (mm/timestep/m²) according to Pistocci and Dorati 2018
+    k1W1 <- W1 * k1 # Maximum conveyance of the network k1*W1
 
-    rate_constant_tank_storage <- tank_dwf_dilution_rate * qdwf / tank_storage # Tank Rate ((timestep)-1) (k2)
-    k2 <- rate_constant_tank_storage
-
-
-    network_max_conveyance <- qdwf * network_dwf_dilution_rate # 12.75098313 # Maximum conveyance of the network (mm/timestep/m²) according to Pistocci and Dorati 2018
-    network_storage_mult_rate <- network_storage * rate_constant_network_storage # Maximum conveyance of the network k1*W1
+    print(paste0("network max conveyance according to Pistoccio: ", network_max_conveyance, " and k1W1: ", k1W1))
 
 
-    # try different k1 for Stuttgart
-    #k1 <- 0.3
-    #rate_constant_tank_storage <- k1
-    #k2 <- 1.2
-    #rate_constant_tank_storage <- k2
-
-    print(paste0("k0 is ", rate_constant_surface_storage, " 1/timestep"))
+    print(paste0("k0 is ", k0, " 1/timestep"))
     print(paste0("k1 is ", k1, " 1/timestep"))
     print(paste0("k2 is ", k2, " 1/timestep"))
 
-    print(paste0("W0 is ", catchment_surface_storage, " mm"))
-    print(paste0("W1 is ", network_storage, " mm"))
-    print(paste0("W2 is ", tank_storage, " mm"))
+    print(paste0("W0 is ", W0, " mm"))
+    print(paste0("W1 is ", W1, " mm"))
+    print(paste0("W2 is ", W2, " mm"))
 
-    print(paste0("dt is ", tank_dwf_dilution_rate, ""))
-    print(paste0("dn is ", network_dwf_dilution_rate, ""))
+    print(paste0("dt is ", dt, ""))
+    print(paste0("dn is ", dn, ""))
 
     print(paste0("qdwf is ", qdwf))
     print(paste0("time step is ", time_step," hours"))
@@ -112,18 +98,18 @@ cso_model <- function(
 
     ### Surface Storage S(t) ### Equation 1
     v <- numeric(length(precipitation))
-    v[1] <- pmin(precipitation[1], catchment_surface_storage)
+    v[1] <- pmin(precipitation[1], W0)
     for (t in 2:length(v)) {
         v[t] <- min(
-            catchment_surface_storage,
-            if (precipitation[t] > 0) precipitation[t] + v[t - 1] else v[t - 1] * exp(-rate_constant_surface_storage)
+            W0,
+            if (precipitation[t] > 0) precipitation[t] + v[t - 1] else v[t - 1] * exp(-k0)
         )
     }
     data[, surface_storage := v]
 
     ### Runoff (Rainfall that reaches the network) R(t) ### Equation 2
-    data[, runoff := pmax(0, precipitation - (catchment_surface_storage - shift(surface_storage)))]
-    data[1, runoff := pmax(0, data$precipitation[2] - catchment_surface_storage + data$surface_storage[2] - data$surface_storage[1])] # S0-1 not known. Instead Runoff estimated via what must have been excess at t=1 to get from S0 to S1 (rain first logic: P (Rain), St, R)
+    data[, runoff := pmax(0, precipitation - (W0 - shift(surface_storage)))]
+    data[1, runoff := pmax(0, data$precipitation[2] - W0 + data$surface_storage[2] - data$surface_storage[1])] # S0-1 not known. Instead Runoff estimated via what must have been excess at t=1 to get from S0 to S1 (rain first logic: P (Rain), St, R)
 
 
     ### Ft Network Flow ### Equation (4)
@@ -131,8 +117,8 @@ cso_model <- function(
     v[1] <- data$runoff[1] + qdwf  # initialize first element as runoff plus qdwf
 
     for (t in 2:nrow(data)) {
-        v[t] <- (data$runoff[t] + qdwf) * (1 - exp(-rate_constant_network_storage)) +
-            v[t - 1] * exp(-rate_constant_network_storage)
+        v[t] <- (data$runoff[t] + qdwf) * (1 - exp(-k1)) +
+            v[t - 1] * exp(-k1)
 
     # Barcelona
     # for (t in 2:nrow(data)) {
@@ -144,20 +130,20 @@ cso_model <- function(
 
 
     ### Worst case overflow E(t) ### Equation 3 (overflow volume if no buffering capacity of the sewer network)
-    data[ , worst_case_overflow := pmax(runoff + qdwf - network_storage_mult_rate, 0)]
+    data[ , worst_case_overflow := pmax(runoff + qdwf - k1W1, 0)]
     # Formula for Vienna more complicated. Ask Nina.
 
 
     # adding A and B terms to check results
-    data[, A := runoff + qdwf - rate_constant_network_storage * network_storage]
+    data[, A := runoff + qdwf - k1 * W1]
     data[, B := runoff + qdwf - shift(network_flow, 1L)] # default is type 'lag', so 1L means one previous timestep
 
 
     ### Scenario in one step ### Implementation checked by Steffen, just changed from function to direct data.table assignment
     data[, scenario :=
              fcase(  ( B >= 0 ) & ( A >= B ) | ( B <= 0 ) & ( A >= 0 ), "a", # B<=0 here in appendix, means network overflow 0, but important distinction for tank overflow
-                     ( B >= 0 ) & ( A <= B )  &  ( A >= B * exp(-rate_constant_network_storage)), "b", # due to mail: A>=Bexp, equal returns exactly 0, but scenario matters for the tank overflow calculation
-                     ( B <= 0 ) & ( A >= B ) & ( A <= B * exp(-rate_constant_network_storage)), "c", # B <= 0 in appendix, again exactly 0 should still not be d for tank overflow calculations
+                     ( B >= 0 ) & ( A <= B )  &  ( A >= B * exp(-k1)), "b", # due to mail: A>=Bexp, equal returns exactly 0, but scenario matters for the tank overflow calculation
+                     ( B <= 0 ) & ( A >= B ) & ( A <= B * exp(-k1)), "c", # B <= 0 in appendix, again exactly 0 should still not be d for tank overflow calculations
                      default = "d"
     )]
 
@@ -166,7 +152,7 @@ cso_model <- function(
     # used in tank overflow calculations
     data[, tau1 := fcase(
         scenario %in% c("a", "d"), 0,
-        scenario %in% c("b", "c"), log(B/A) / rate_constant_network_storage
+        scenario %in% c("b", "c"), log(B/A) / k1
     )]
 
 
@@ -174,7 +160,7 @@ cso_model <- function(
     fun_network_overflow <- function(A,
                                      B,
                                      scenario,
-                                     rate_constant_network_storage) {
+                                     k1) {
 
         ratio <- B / A
         # safe_ratio <- ifelse(ratio > 0, ratio, NA_real_) # to avoid warnings for log(B/A) when negative
@@ -210,7 +196,7 @@ cso_model <- function(
         return(Eprime)
     }
 
-    data[, network_overflow := pmax(0, fun_network_overflow(A, B, scenario, rate_constant_network_storage))]
+    data[, network_overflow := pmax(0, fun_network_overflow(A, B, scenario, k1))]
 
 
 
@@ -223,11 +209,11 @@ cso_model <- function(
         runoff,
         network_flow,
         tau1,
-        k2,                   # rate_constant_tank_storage
+        k2,                   # k2
         qdwf,
-        k1,                   # rate_constant_network_storage
-        W1,                   # network_storage
-        k1W1,                 # network_storage_mult_rate
+        k1,                   # k1
+        W1,                   # W1
+        k1W1,                 # k1W1
         W2,                   # max volume the tank can be filled with
         scenario
     ) {
@@ -292,14 +278,14 @@ cso_model <- function(
              "virtual_volume_c_t1",
              "virtual_volume_b",
              "virtual_volume_c",
-             "tank_volume_W") := fun_virtual_volume_and_tank_volume(runoff, network_flow, tau1, rate_constant_tank_storage, qdwf, rate_constant_network_storage,
-                                                                  network_storage, network_storage_mult_rate, tank_storage, scenario)]
+             "tank_volume_W") := fun_virtual_volume_and_tank_volume(runoff, network_flow, tau1, k2, qdwf, k1,
+                                                                  W1, k1W1, W2, scenario)]
 
 
     ### tau2 ### equation 11 in appendix B
-    data[, part1 := rate_constant_network_storage * network_storage - rate_constant_tank_storage * shift(tank_volume_W)]
-    data[, part2 := rate_constant_network_storage * network_storage - rate_constant_tank_storage * tank_storage]
-    data[, tau2 :=  fifelse((part2 != 0 & (part1/part2) > 0), pmax(0, pmin(1, log(part1/part2) / rate_constant_tank_storage)), 0)]
+    data[, part1 := k1 * W1 - k2 * shift(tank_volume_W)]
+    data[, part2 := k1 * W1 - k2 * W2]
+    data[, tau2 :=  fifelse((part2 != 0 & (part1/part2) > 0), pmax(0, pmin(1, log(part1/part2) / k2)), 0)]
     # The if conditions should never happen, it makes no sense to build a tank with greater conveyance than the network
     # as that would mean no storage --> what it is set to (here 0) does not matter
 
@@ -312,75 +298,75 @@ cso_model <- function(
 
 
     ### Ea(t) ### Equation 12 in appendix B
-    data[, Ea := (1 - tau2) * (network_storage_mult_rate - (rate_constant_tank_storage * tank_storage))]
+    data[, Ea := (1 - tau2) * (k1W1 - (k2 * W2))]
 
     ### t2_1 ###
     fun_t2_1 <- function(tank_volume,
                          virtual_volume_d,
-                         network_storage_mult_rate,
-                         rate_constant_tank_storage,
-                         tank_storage) {
+                         k1W1,
+                         k2,
+                         W2) {
         v <- numeric(length(tank_volume))
         v[1] <- NA_real_
         for (t in 2:length(v)) {
             v[t] <- max(0, min(1,
-                               fcase(tank_volume[t - 1] == tank_storage & virtual_volume_d[t] >= tank_storage, 0, # tank full from beginning and stays full -> overflow from time 0
-                                     tank_volume[t - 1] == tank_storage,                                       (tank_volume[t - 1] - tank_storage) / (tank_volume[t - 1] - virtual_volume_d[t]), # the ratio
+                               fcase(tank_volume[t - 1] == W2 & virtual_volume_d[t] >= W2, 0, # tank full from beginning and stays full -> overflow from time 0
+                                     tank_volume[t - 1] == W2,                                       (tank_volume[t - 1] - W2) / (tank_volume[t - 1] - virtual_volume_d[t]), # the ratio
                                      tank_volume[t - 1] == virtual_volume_d[t],                                1, # if tau can't be determined (and Wt-1 < W2), tau2 is 1 (case where it is 0 covered by first expression)
-                                     virtual_volume_d[t] >= tank_storage,                                      (tank_volume[t - 1] - tank_storage) / (tank_volume[t - 1] - virtual_volume_d[t]), # the ratio
+                                     virtual_volume_d[t] >= W2,                                      (tank_volume[t - 1] - W2) / (tank_volume[t - 1] - virtual_volume_d[t]), # the ratio
                                      default = 1)
                          ))
         }
         return(v)
     }
 
-    data[, t2_1 := fun_t2_1(tank_volume_W, virtual_volume_d, network_storage_mult_rate, rate_constant_tank_storage, tank_storage)]
+    data[, t2_1 := fun_t2_1(tank_volume_W, virtual_volume_d, k1W1, k2, W2)]
 
 
     ### Ed(t) ### Equation 20 (?) in appendix B
 
     data[, Ed := fifelse(
-        shift(data$tank_volume) < tank_storage,
+        shift(data$tank_volume) < W2,
         # case: tank not full at previous timestep
-        (runoff + qdwf - rate_constant_tank_storage * tank_storage) * (1 - t2_1) +
-            (runoff + qdwf - shift(data$network_flow)) / rate_constant_network_storage *
-            (exp(-rate_constant_network_storage) - exp(-rate_constant_network_storage * t2_1)),
+        (runoff + qdwf - k2 * W2) * (1 - t2_1) +
+            (runoff + qdwf - shift(data$network_flow)) / k1 *
+            (exp(-k1) - exp(-k1 * t2_1)),
 
         # case: tank full at previous timestep
-        (runoff + qdwf - rate_constant_tank_storage * tank_storage) * t2_1 +
-            (t2_1 + qdwf - shift(data$network_flow)) / rate_constant_network_storage *
-            (exp(-rate_constant_network_storage * t2_1) - 1)
+        (runoff + qdwf - k2 * W2) * t2_1 +
+            (t2_1 + qdwf - shift(data$network_flow)) / k1 *
+            (exp(-k1 * t2_1) - 1)
     )]
 
 
 
     ### t2_2 ###
-    data[ ,t2_2 := pmin(1, (shift(tank_volume_W) - tank_storage) / (shift(tank_volume_W) - virtual_volume_b)) * tau1]
+    data[ ,t2_2 := pmin(1, (shift(tank_volume_W) - W2) / (shift(tank_volume_W) - virtual_volume_b)) * tau1]
 
 
     ### Eb ###
     data[, Eb :=
              fifelse(
-                 ((network_storage * rate_constant_network_storage - rate_constant_tank_storage * tank_storage) != 0 & ((network_storage * rate_constant_network_storage - virtual_volume_b_t1 * rate_constant_tank_storage)/(network_storage * rate_constant_network_storage - rate_constant_tank_storage * tank_storage)) > 0),
-                 (runoff + qdwf - rate_constant_tank_storage * tank_storage) * (tau1 - t2_2) + (runoff + qdwf - shift(network_flow)) / rate_constant_network_storage *
-                     (exp(-rate_constant_network_storage * tau1) - exp(-rate_constant_network_storage * t2_2)) +
-                     (network_storage * rate_constant_network_storage - rate_constant_tank_storage * tank_storage) *
-                     (1 - pmin(1, tau1 + pmax(0, log((network_storage * rate_constant_network_storage - virtual_volume_b_t1 * rate_constant_tank_storage) / # tau1 capped at 1 here
-                                                         (network_storage * rate_constant_network_storage - rate_constant_tank_storage * tank_storage)) / rate_constant_tank_storage))),
+                 ((W1 * k1 - k2 * W2) != 0 & ((W1 * k1 - virtual_volume_b_t1 * k2)/(W1 * k1 - k2 * W2)) > 0),
+                 (runoff + qdwf - k2 * W2) * (tau1 - t2_2) + (runoff + qdwf - shift(network_flow)) / k1 *
+                     (exp(-k1 * tau1) - exp(-k1 * t2_2)) +
+                     (W1 * k1 - k2 * W2) *
+                     (1 - pmin(1, tau1 + pmax(0, log((W1 * k1 - virtual_volume_b_t1 * k2) / # tau1 capped at 1 here
+                                                         (W1 * k1 - k2 * W2)) / k2))),
                  0 # same logic as with tau2; tank conveyance should be smaller than network conveyance and inserting 0 should not happen
              )]
 
 
 
     ### t2_3 ### # implementation fits the Excel version and makes sense with the appendix
-    data[, t2_3 := fcase(virtual_volume_c_t1 < tank_storage, tau1, # here the same as condition tau > tau1; if tau2''' == tau1, no overflow for that integral, Ec collapses to just the tau<=tau1 part
+    data[, t2_3 := fcase(virtual_volume_c_t1 < W2, tau1, # here the same as condition tau > tau1; if tau2''' == tau1, no overflow for that integral, Ec collapses to just the tau<=tau1 part
                          virtual_volume_c_t1 == tank_volume_W, 1, # if the virtual volume at tau1 the same as the tank volume at the end of the timestep, tau1 must have been 1 and tau2''' becomes 1 in its formula
-                         rep(TRUE,.N), tau1 + (1 - tau1) * (virtual_volume_c_t1 - tank_storage) / (virtual_volume_c_t1 - tank_volume_W) # this is basically the else part
+                         rep(TRUE,.N), tau1 + (1 - tau1) * (virtual_volume_c_t1 - W2) / (virtual_volume_c_t1 - tank_volume_W) # this is basically the else part
                          )]
     ### Ec ###
-    data[, Ec := pmax(0, (runoff + qdwf - (rate_constant_tank_storage * tank_storage)) * (t2_3 - tau1) + ((runoff + qdwf - network_flow) / rate_constant_network_storage) *
-                          (exp(-rate_constant_network_storage * t2_3) - exp(-rate_constant_network_storage * tau1)) +
-                          ((network_storage * rate_constant_network_storage) - (rate_constant_tank_storage * tank_storage)) * (tau1 - pmin(tau1, tau2)))]
+    data[, Ec := pmax(0, (runoff + qdwf - (k2 * W2)) * (t2_3 - tau1) + ((runoff + qdwf - network_flow) / k1) *
+                          (exp(-k1 * t2_3) - exp(-k1 * tau1)) +
+                          ((W1 * k1) - (k2 * W2)) * (tau1 - pmin(tau1, tau2)))]
 
 
 

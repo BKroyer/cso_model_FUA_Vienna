@@ -177,7 +177,7 @@ cso_model <- function(
                                      rate_constant_network_storage) {
 
         ratio <- B / A
-        safe_ratio <- ifelse(ratio > 0, ratio, NA_real_) # to avoid warnings for log(B/A) when negative
+        # safe_ratio <- ifelse(ratio > 0, ratio, NA_real_) # to avoid warnings for log(B/A) when negative
 
         ratio_A_B <- A / B
         safe_ratio_A_B <- ifelse(ratio_A_B > 0, ratio_A_B, NA_real_)
@@ -191,7 +191,7 @@ cso_model <- function(
             # scenario b:
             ## ln(A/B) in the Excel files, I think B/A is correct, but set to A/B to compare to Excel
             scenario == "b",
-            A * (1 - (1 + log(safe_ratio)) / k1) +
+            A * (1 - (1 + log(ratio)) / k1) +
                 B / k1 * exp(-k1),
 
             # scenario == "b",
@@ -200,7 +200,7 @@ cso_model <- function(
 
             # scenario c:
             scenario == "c",
-            A / k1 * (1 + log(safe_ratio)) -
+            A / k1 * (1 + log(ratio)) -
                 B / k1,
 
             # scenario d (no overflow)
@@ -300,8 +300,15 @@ cso_model <- function(
     data[, part1 := rate_constant_network_storage * network_storage - rate_constant_tank_storage * shift(tank_volume_W)]
     data[, part2 := rate_constant_network_storage * network_storage - rate_constant_tank_storage * tank_storage]
     data[, tau2 :=  fifelse((part2 != 0 & (part1/part2) > 0), pmax(0, pmin(1, log(part1/part2) / rate_constant_tank_storage)), 0)]
+    # The if conditions should never happen, it makes no sense to build a tank with greater conveyance than the network
+    # as that would mean no storage --> what it is set to (here 0) does not matter
 
-    # data[, c("part1", "part2") := NULL] # not needed further
+    if (any(data$part2 <= 0 | data$part1 < 0, na.rm = TRUE)) {
+        stop("Tank conveyance numerically greater than or equal to network conveyance, does not make sense in construction.")
+    }
+
+
+    data[, c("part1", "part2") := NULL] # not needed further
 
 
     ### Ea(t) ### Equation 12 in appendix B
@@ -352,7 +359,7 @@ cso_model <- function(
 
 
     ### Eb ###
-    data[, Eb := # maybe change this to a safe_ratio in log if warnings annoying
+    data[, Eb :=
              fifelse(
                  ((network_storage * rate_constant_network_storage - rate_constant_tank_storage * tank_storage) != 0 & ((network_storage * rate_constant_network_storage - virtual_volume_b_t1 * rate_constant_tank_storage)/(network_storage * rate_constant_network_storage - rate_constant_tank_storage * tank_storage)) > 0),
                  (runoff + qdwf - rate_constant_tank_storage * tank_storage) * (tau1 - t2_2) + (runoff + qdwf - shift(network_flow)) / rate_constant_network_storage *
@@ -360,7 +367,7 @@ cso_model <- function(
                      (network_storage * rate_constant_network_storage - rate_constant_tank_storage * tank_storage) *
                      (1 - pmin(1, tau1 + pmax(0, log((network_storage * rate_constant_network_storage - virtual_volume_b_t1 * rate_constant_tank_storage) / # tau1 capped at 1 here
                                                          (network_storage * rate_constant_network_storage - rate_constant_tank_storage * tank_storage)) / rate_constant_tank_storage))),
-                 0
+                 0 # same logic as with tau2; tank conveyance should be smaller than network conveyance and inserting 0 should not happen
              )]
 
 
@@ -487,6 +494,23 @@ cso_model <- function(
     # ### ww_tank_overflow ###
     #
     # data$ww_tank_overflow <- data$tank_overflow / (1 + data$drainage / data$qdwf)
+
+    if (sum(is.na(data$Eb)) == 1 & sum(is.na(data$tau1)) <= 1 & sum(is.na(data$tau2)) == 1){
+        print("NA warnings ok for Eb, tau1, tau2: Only first row affected") # first row is always NA in Eb & tau2, might not be in tau1 if scenario a or d
+    }else{
+        print("NA warnings NOT ok for Eb, tau1 and/or tau2")
+    }
+
+    if (sum(is.na(data$network_overflow)) == 0){
+        print("NA warnings ok for network_overflow: No rows affected, all scenarios get evaluated") # first row is always NA in Eb & tau2, might not be in tau1 if scenario a or d
+    }else{
+        print("NA warnings NOT ok for network_overflow")
+    }
+
+
+    if (data[, any(sapply(.SD, is.infinite))]) {
+        stop("Error: data contains Inf or -Inf values. Most probably due to a log expression being 0.")
+    }
 
 
     return(data)

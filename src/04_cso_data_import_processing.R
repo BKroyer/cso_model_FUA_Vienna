@@ -216,7 +216,6 @@ mask <- c(1:1460) # Innsbruck 1450 has scenario c
 precipitation <- data_innsbruck$P#[mask]
 innsbruck_time <- data_innsbruck$DateValue#[mask]
 
-area <- 9.15
 mod_res <- cso_model(population = 165000,
                      area = 9.15,
                      share_served_by_CS = 1,

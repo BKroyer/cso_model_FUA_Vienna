@@ -13,63 +13,6 @@ load.project()
 ##################################################################
 
 
-# Wrapper function to apply cso_model ---------------------------------------------------------------------------
-
-run_cso_for_single_gridcode <- function(gridcode_temp,
-                             params,
-                             pop_dt,
-                             imp_dt,
-                             share_dt,
-                             prec_dt) {
-
-    # extract single rows
-    p     <- params[gridcode == gridcode_temp]
-    pop   <- pop_dt[settlement_id  == gridcode_temp]
-    imp   <- imp_dt[settlement_id  == gridcode_temp]
-    share <- share_dt[gridcode == gridcode_temp]
-
-    # precipitation time series
-    prec  <- prec_dt[gridcode == gridcode_temp]
-
-    cat("-------------------------------------------\n")
-    cat("Starting gridcode:", gridcode_temp, "\n")
-    t1 <- Sys.time()
-
-    # run model
-    res <- cso_model(
-        population = pop$population,
-        area = imp$imp_area_km2,
-        share_served_by_CS = share$share_served_by_CS,
-        time = prec$time,
-        precipitation = prec$precipitation_mm,
-        dwf_per_capita = p$dwf_per_capita,
-        W0 = p$W0,
-        k0 = p$k0,
-        dn = p$dn,
-        dt = p$dt,
-        W1 = p$W1,
-        W2 = p$W2
-    )
-
-    t2 <- Sys.time()
-    cat("Finished gridcode:", gridcode_temp, "in", round(difftime(t2, t1, units="secs"),1), "seconds\n")
-    cat("-------------------------------------------\n")
-
-    # ensure data.table + attach gridcode
-    #res_dt <- as.data.table(res) # too large for that idea of rbinding everything
-    #res_dt[, gridcode := gridcode]
-
-    # save used values
-    used_vals <- cbind(p, pop$population, imp$imp_area_km2, share$share_served_by_CS)
-
-    location <- as.character(gridcode_temp)
-    results_nam <- paste0(location, paste0("_", datum, "_y", substr(min_time, 1, 4), "_",  substr(max_time, 1, 4)))
-    path_out <- file.path(path_intermediate_res, results_nam)
-    wb_path <- process_and_plot_results(res, path_out, location = location, used_params = used_vals)#, validation_data = data_vienna, validation_area = 70)
-
-    wb_path
-}
-
 ######################################################################
 # 1. Import & prepare pre-processed precipitation and settlement data ------------------------------------------------------
 ######################################################################

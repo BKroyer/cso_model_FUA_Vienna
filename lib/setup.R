@@ -9,8 +9,8 @@ ln_A_B <- FALSE # calculating with typo in ln network flow scenario b?
 
 # Time period of interest (Used in precipitation data extraction & mask when applying model) -------------------------------------
 
-date_begin <- "2001-01-01"
-date_end <- "2016-12-31"
+date_begin <- "2010-01-01"
+date_end <- "2020-12-31"
 
 # used for precipitation extraction originally:
 # date_begin <- "2010-12-15"

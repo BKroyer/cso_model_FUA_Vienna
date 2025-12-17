@@ -20,10 +20,24 @@ date_end <- "2020-12-31"
 #date_begin <- "2001-01-01"
 #date_end <- "2016-12-31"
 
+# Area of interest ---------------------------------------------------------------------------------------------------------------
+
+area_of_interest <- "Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp" # "Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp"
+settlements <- "Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp"
+
 # Gridcode specification (NULL to process all within AoI, else vector of gridcodes to process) -----------------------------------
 
-gridcode_to_process <- c(253253) # 253253 is wien
+gridcode_to_process <- c(253253, 261635, 259334, 266367, 265844) # 253253 is wien, the others are random to test multiple processing
 
+# model params for the gridcodes, either one for all or one per gridcode (vector of length of gridcodes)
+
+k0 <- 0.3
+W0 <- 1.5
+dn <- 29
+dt <- 2
+W1 <- 5
+W2 <- 1.5
+dwf_per_capita <- 0.2
 
 
 # Data processing / calling -------------------------------------------------------------------------------------------------------
@@ -37,42 +51,15 @@ if (already_processed){
 
 }else{
 
-    ### Area of interest
-    # thesis: Upper Danube Basin (catchment_units)
-    # paper: Europe FUA (671) (DATA MISSING)
-    area_of_interest <- vect("Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp")
-    aoi_dissolved <- aggregate(area_of_interest)
-    aoi_epsg4326 <- project(aoi_dissolved, "EPSG:4326")
-    aoi_epsg3035 <- project(aoi_dissolved, "EPSG:3035")
-    writeVector(aoi_epsg3035, "data/intermediate_results/aoi_epsg3035.gpkg", overwrite = TRUE)
+    wrapper_preprocess_data(area_of_interest, settlements)
+    ### Area of interest: thesis: Upper Danube Basin (catchment_units); paper: Europe FUA (671) (lavalle)
 
-    # buffering for precipitation extraction
-    aoi_buffered <- buffer(aoi_dissolved, 10000) # Fix potential geometry issues and create buffer 10 km
-    aoi_buffered_epsg4326 <- project(aoi_buffered, "EPSG:4326")
-    writeVector(aoi_buffered_epsg4326, "data/intermediate_results/aoi_buffered_epsg4326.gpkg", overwrite = TRUE)
-
-    ### Settlements
-    # thesis: agglo.shp from Pistoccio 2022
-    settlements <- vect("Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp")
-    settlements_id <- "settlements_id"
-    settlements_epsg3035 <- project(settlements, "EPSG:3035")
-    urb_3035 <- crop(settlements_epsg3035, aoi_epsg3035)
-    #all(is.valid(urb_3035)) # check validity of geometries. Should result in TRUE (did results in TRUE Oct31)
-    writeVector(urb_3035, file.path(path_intermediate_res, "settlements_cropped_epsg3035.gpkg"), overwrite = TRUE)
-
-
-    settlements_epsg4326 <- project(settlements, "EPSG:4326")
-    urb_4326 <- crop(settlements_epsg4326, aoi_epsg4326)
-    writeVector(urb_4326, file.path(path_intermediate_res, "settlements_cropped_epsg4326.gpkg"), overwrite = TRUE)
 }
 
 
 
-
-
-
 # AoI  ---------------------------------------------------------------------------------------------------------------------------
-aoi <- vect("Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp")
+aoi <- vect(area_of_interest)
 if (crs(aoi, describe=T)$code != "3035"){
     aoi_3035 <- project(aoi, crs(urb_3035)) # using urb_3035 from setup as reference as has gridcodes and spatially defined
 } else {
@@ -90,3 +77,9 @@ if (!is.null(gridcode_to_process) & !(all(gridcode_to_process %in% gridcode_in_a
 if (is.null(gridcode_to_process)){
     gridcode_to_process <- gridcode_in_aoi
 }
+
+
+
+# collect parameters for the actual gridcodes to process -------------------------------------------------------------------------
+
+params <- data.table(gridcode = gridcode_to_process, k0 = k0, W0 = W0, dn = dn, dt = dt, W1 = W1, W2 = W2, dwf_per_capita = dwf_per_capita, key = "gridcode")

@@ -27,3 +27,6 @@ saveRDS(pop[,.(settlement_id, population)], file.path(path_intermediate_res, "po
 # pop_austria <- exact_extract(popdens_raw, sf::st_as_sf(austria), fun = "sum", append_cols = "BL")
 # sum(pop_austria$sum)
 # # Result: 8 966 859
+
+share_CS <- data.table(gridcode = unique(prec_dt$gridcode), share_served_by_CS = 0.28, key = "gridcode") # Update with the actual data
+saveRDS(share_CS[,.(gridcode, share_served_by_CS)], file.path(path_intermediate_res, "share_CS.rds"))

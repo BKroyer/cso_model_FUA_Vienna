@@ -46,9 +46,10 @@ plot_compare_data <- function(var_nam, compare_data, path_out){
     )
 }
 
-process_and_plot_results <- function(mod_res, path_out, validation_data = NULL, validation_area = NULL, location = "", mask = NULL, time_step = 3, round_to = 4 ){
+process_and_plot_results <- function(mod_res, path_out, used_params, validation_data = NULL, validation_area = NULL, location = "", mask = NULL, time_step = 3, round_to = 4){
     #' @param mod_res the model result data frame (output of model_cso)
     #' @param path_out path to save the plots to; will be created but not overwritten
+    #' @param used_params data.table of the parameters used in that model run, to be saved to results tables
     #' @param validation_data data frame with same timestep as mod_res and columns for network and tank overflow, if NULL, only model results are summarized
     #' @param validation_area option to specify reference area of validation dataset in case if differs from modelled unit
     #' @param location name of the processed location as a string, will be added to the result file names
@@ -59,6 +60,7 @@ process_and_plot_results <- function(mod_res, path_out, validation_data = NULL, 
     #' @returns print of results, saves plots and table results
 
     # create the folder
+    # path_out <- normalizePath(path_out, mustWork = FALSE)
     dir.create(path_out, recursive = TRUE, showWarnings = FALSE)
 
 
@@ -239,6 +241,11 @@ process_and_plot_results <- function(mod_res, path_out, validation_data = NULL, 
 
     wb <- createWorkbook()
 
+    sheet <- paste0("params_", location)
+    addWorksheet(wb, sheet)
+    writeData(wb, sheet, params, colNames = TRUE)
+    setColWidths(wb, sheet, cols = 1:10, widths = 15)
+
     sheet <- paste0("overflow_", location)
     addWorksheet(wb, sheet)
     writeData(wb, sheet, summary_overflow)
@@ -262,7 +269,7 @@ process_and_plot_results <- function(mod_res, path_out, validation_data = NULL, 
     #                      paste0("summary_event_metrics_", location, ".csv"))
     # )
 
-    saveWorkbook(wb, file = file.path(path_out, paste0("cso_summaries_", location, ".xlsx")), overwrite = TRUE)
+    #saveWorkbook(wb, file = file.path(path_out, paste0("cso_summaries_", location, ".xlsx")), overwrite = TRUE)
 
 
     ## RETURN ========
@@ -270,5 +277,10 @@ process_and_plot_results <- function(mod_res, path_out, validation_data = NULL, 
     invisible(list(
         summary_overflow = summary_overflow,
         event_metrics = event_metrics
+    ))
+
+    return(list(
+        wb = wb,
+        path_out = path_out
     ))
 }

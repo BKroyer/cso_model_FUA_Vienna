@@ -1,5 +1,6 @@
 # Script to run cso model on time series
 # Written by Steffen Kittlaus based on a draft by Nina Kleemeyer
+# Heavily modified by Bettina Kroyer
 library(ProjectTemplate)
 load.project()
 
@@ -11,6 +12,10 @@ load.project()
 # 3. Calculate CSO (Combined Sewer Overflow) metrics #
 # 4. Export results for each file                    #
 ######################################################
+
+########################################################
+# Comparing to Excel (city-wise)
+########################################################
 
 # validation functions  -----------------------------------------------------------------------------------------------
 ## get right cols from validation and modelled data
@@ -58,72 +63,232 @@ plot_compare_data <- function(var_nam, compare_data, path_out){
     )
 }
 
-
-process_and_plot_results <- function(mod_res, validation_data, mask, path_out, time_step = 3, round_to = 4){
+process_and_plot_results <- function(mod_res, path_out, validation_data = NULL, validation_area = NULL, location = "", mask = NULL, time_step = 3, round_to = 4 ){
     #' @param mod_res the model result data frame (output of model_cso)
-    #' @param validation_data data frame with same timestep as mod_res and columns for network and tank overflow
+    #' @param path_out path to save the plots to; will be created but not overwritten
+    #' @param validation_data data frame with same timestep as mod_res and columns for network and tank overflow, if NULL, only model results are summarized
+    #' @param validation_area option to specify reference area of validation dataset in case if differs from modelled unit
+    #' @param location name of the processed location as a string, will be added to the result file names
     #' @param mask the row indices to consider in mean and total computation
-    #' @param path_out path to save the plots to
     #' @param time_step the time step in hours, default is 3
     #' @param round_to the digits to round results to, default is 4
     #'
     #' @returns print of results, saves plots and table results
 
+    # create the folder
+    dir.create(path_out, recursive = TRUE, showWarnings = FALSE)
+
+
+    has_validation <- !is.null(validation_data)
+
     area <- unique(mod_res$area)
-
-    ## TANK
-    var_nam <- "tank"
-    # get the right columns
-    tank_mod <- get_cols(var_nam, mod_res)
-    tank_orig <- get_cols(var_nam, validation_data)
-    tank_compare_data <- data.table(time = mod_res$time, orig = tank_orig, mod = tank_mod, scenario = mod_res$scenario)
-    # annual mean overflows
-    annual_mean_tank <- mean(tank_mod[mask], na.rm=T) * (24/as.integer(time_step)) * 365
-    annual_mean_tank_orig <- mean(tank_orig[mask], na.rm=T) * (24/as.integer(time_step)) * 365
-    # plot
-    plot_compare_data(var_nam, tank_compare_data, path_out)
-
-
-    ## NETWORK
-    var_nam <- "network"
-    # get the right columns
-    network_mod <- get_cols(var_nam, mod_res)
-    network_orig <- get_cols(var_nam, validation_data)
-    network_compare_data <- data.table(time = mod_res$time, orig = network_orig, mod = network_mod, scenario = mod_res$scenario)
-    # annual mean overflows
-    annual_mean_network <- mean(network_mod[mask], na.rm=T) * (24/as.integer(time_step)) * 365
-    annual_mean_network_orig <- mean(network_orig[mask], na.rm=T) * (24/as.integer(time_step)) * 365
-    # plot
-    plot_compare_data(var_nam, network_compare_data, path_out)
-
-
-    # total overflow in Mm³/year respecting the mask
-    total_overflow <- annual_mean_tank + annual_mean_network
-    total_overflow_orig <- annual_mean_tank_orig + annual_mean_network_orig
-    if (!is.na(area)){
-        total_overflow_Mm3y <- round(total_overflow * area / 1000, round_to) # total overflow in million m³ per year for entire study area
-        total_overflow_Mm3y_orig <- round((annual_mean_network_orig + annual_mean_tank_orig) * area / 1000, round_to)
-    }else{
-        total_overflow_Mm3y <- "not computed as area NA"
-        total_overflow_Mm3y_orig <- "not computed as area NA"
+    if (is.null(validation_area)){
+        validation_area <- area
     }
 
 
-    print(paste0("the modeled network overflow is: ", round(annual_mean_network, round_to), " mm/y (vs. validation: ", round(annual_mean_network_orig, round_to)," mm/y)"))
-    print(paste0("the modeled tank overflow is: ", round(annual_mean_tank, round_to), " mm/y (vs. validation: ", round(annual_mean_tank_orig, round_to)," mm/y)"))
-    print(paste0("the modeled total overflow is: ", round(total_overflow, round_to), " mm/y (vs. validation: ", round(total_overflow_orig, round_to)," mm/y)"))
-    print(paste0("the modeled total overflow is: ", total_overflow_Mm3y, " Mm³/y (vs. validation: ", total_overflow_Mm3y_orig, " Mm³/y)"))
+    if (is.null(mask)){
+        mask <- 2:nrow(mod_res) # first row undefined in many variables (due to shift calculations)
+    }
+
+    time_mod <- as.POSIXct(format(mod_res$time, "%Y-%m-%d %H:%M:%S"), tz = "Etc/GMT-1")
+
+    if (has_validation){
+
+        # get datasets onto same timeframe
+        validation_data$DateValue <- as.POSIXct(format(validation_data$DateValue, "%Y-%m-%d %H:%M:%S"), tz = "Etc/GMT-1")
+        time_orig <- validation_data$DateValue
+        min_time <- max(min(time_mod), min(time_orig))
+        max_time <- min(max(time_mod), max(time_orig))
+
+        mod_res <- mod_res[time >= min_time & time <= max_time]
+        setDT(validation_data)
+        validation_data <- validation_data[DateValue >= min_time & DateValue <= max_time]
+
+    } else{
+
+        min_time <- min(time_mod)
+        max_time <- max(time_mod)
+    }
+
+    print(paste0("Aligned common timeframe: ",min_time, " to ", max_time))
+
+    # specify actual timeframe for naming later
+    assign("min_time", min_time)
+    assign("max_time", max_time)
 
 
 
-    # save print result in tables
+    ## aggregate to annual mean values
+    annualise <- function(x) {
+        mean(x[mask], na.rm = TRUE) * (24 / as.integer(time_step)) * 365
+    }
+
+
+    ## TANK =================
+
+    tank_mod <- get_cols("tank", mod_res)
+    annual_mean_tank <- annualise(tank_mod)
+
+    if (has_validation) {
+        tank_orig <- get_cols("tank", validation_data)
+        annual_mean_tank_orig <- annualise(tank_orig)
+
+        plot_compare_data(
+            "tank",
+            data.table(
+                time = mod_res$time,
+                orig = tank_orig,
+                mod  = tank_mod,
+                scenario = mod_res$scenario
+            ),
+            path_out
+        )
+    }
+
+
+    ## NETWORK ==============
+
+    network_mod <- get_cols("network", mod_res)
+    annual_mean_network <- annualise(network_mod)
+
+    if (has_validation) {
+        network_orig <- get_cols("network", validation_data)
+        annual_mean_network_orig <- annualise(network_orig)
+
+        plot_compare_data(
+            "network",
+            data.table(
+                time = mod_res$time,
+                orig = network_orig,
+                mod  = network_mod,
+                scenario = mod_res$scenario
+            ),
+            path_out
+        )
+    }
+
+
+    ## TOTALS ===============
+
+    total_overflow <- annual_mean_tank + annual_mean_network
+    if (has_validation) {
+        total_overflow_orig <- annual_mean_tank_orig + annual_mean_network_orig
+    }
+
+
+    if (!is.na(area)) {
+        total_overflow_Mm3y <- round(total_overflow * area / 1000, round_to)
+        if (has_validation) {
+            total_overflow_Mm3y_orig <- round(total_overflow_orig * validation_area / 1000, round_to)
+        }
+    } else {
+        total_overflow_Mm3y <- NA
+        if (has_validation) total_overflow_Mm3y_orig <- NA
+    }
+
+
+    overflow_duration <- (mean(mod_res$frequency_overflow, na.rm = TRUE) *
+                              (24 / as.integer(time_step)) * 365) * time_step
+
+    cso_volume_per_event <- sum(mod_res$cso_volume_per_event, na.rm = TRUE) /
+        sum(mod_res$rain_end, na.rm = TRUE)
 
 
 
 
+    cat("\n--- CSO summary ---\n")
+    cat("CSO duration (mean): ",
+        round(overflow_duration, round_to), " hrs/year\n")
 
+    cat("CSO volume per event: ",
+        round(cso_volume_per_event, round_to), " mm/event\n\n")
+
+    cat("Network overflow: ",
+        round(annual_mean_network, round_to), " mm/y",
+        if (has_validation)
+            paste0(" (validation: ",
+                   round(annual_mean_network_orig, round_to), " mm/y)"),
+        "\n")
+
+    cat("Tank overflow: ",
+        round(annual_mean_tank, round_to), " mm/y",
+        if (has_validation)
+            paste0(" (validation: ",
+                   round(annual_mean_tank_orig, round_to), " mm/y)"),
+        "\n")
+
+    cat("Total overflow: ",
+        round(total_overflow, round_to), " mm/y",
+        if (has_validation)
+            paste0(" (validation: ",
+                   round(total_overflow_orig, round_to), " mm/y)"),
+        "\n")
+
+    cat("Total overflow: ",
+        total_overflow_Mm3y, " Mm³/y",
+        if (has_validation)
+            paste0(" (validation: ", total_overflow_Mm3y_orig, " Mm³/y)"),
+        "\n")
+
+
+    ## SUMMARY TABLES =======
+
+    summary_overflow <- data.table(
+        metric = c("network [mm]", "tank [mm]", "total [mm]", "total [Mm3y]"),
+        model  = round(c(annual_mean_network,
+                         annual_mean_tank,
+                         total_overflow,
+                         total_overflow_Mm3y), round_to),
+        validation = if (has_validation)
+            round(c(annual_mean_network_orig,
+                    annual_mean_tank_orig,
+                    total_overflow_orig,
+                    total_overflow_Mm3y_orig), round_to)
+        else NA_real_
+    )
+
+    event_metrics <- data.table(
+        metric = c("CSO duration (hrs/y)", "CSO volume per event (mm)"),
+        value  = round(c(overflow_duration, cso_volume_per_event), round_to)
+    )
+
+
+    wb <- createWorkbook()
+
+    sheet <- paste0("overflow_", location)
+    addWorksheet(wb, sheet)
+    writeData(wb, sheet, summary_overflow)
+    setColWidths(wb, sheet, cols = 1:3, widths = 25)
+
+    sheet <- paste0("event_metrics_", location)
+    addWorksheet(wb, sheet)
+    writeData(wb, sheet, event_metrics)
+    setColWidths(wb, sheet, cols = 1:3, widths = 25)
+
+    # fwrite(
+    #     summary_overflow,
+    #     file = file.path(path_out,
+    #                      paste0("summary_overflow_", location, ".csv"))
+    # )
+
+    #
+    # fwrite(
+    #     event_metrics,
+    #     file = file.path(path_out,
+    #                      paste0("summary_event_metrics_", location, ".csv"))
+    # )
+
+    saveWorkbook(wb, file = file.path(path_out, paste0("cso_summaries_", location, ".xlsx")), overwrite = TRUE)
+
+
+    ## RETURN ========
+
+    invisible(list(
+        summary_overflow = summary_overflow,
+        event_metrics = event_metrics
+    ))
 }
-
 
 
 # SANTIAGO ------------------------------------------------------------------------------------------------------------
@@ -212,11 +377,11 @@ mod_res <- cso_model(population = 200000,
 
 # INNSBRUCK -------------------------------------------------------------------------------------------------------------
 data_innsbruck <- read_excel(file.path(path_intermediate_res, "model_prototype (3hourly)_Innsbruck.xlsx"), sheet = 3)
-mask <- c(1:1460) # Innsbruck 1450 has scenario c
+#mask <- c(1:1460) # Innsbruck 1450 has scenario c
 precipitation <- data_innsbruck$P#[mask]
 innsbruck_time <- data_innsbruck$DateValue#[mask]
 
-mod_res <- cso_model(population = 165000,
+mod_res_innsbruck <- cso_model(population = 165000,
                      area = 9.15,
                      share_served_by_CS = 1,
                      #pop_density = 222,
@@ -229,7 +394,10 @@ mod_res <- cso_model(population = 165000,
                      dwf_per_capita = 0.2,
                      time = innsbruck_time,
                      precipitation = precipitation) #validation_data$P
-
+location <- "Innsbruck_EXCEL"
+results_nam <- paste0(location, paste0("_lnA_B_", datum, "_y", substr(date_begin, 1, 4), "_",  substr(date_end, 1, 4)))
+path_out <- file.path(path_intermediate_res, results_nam)
+process_and_plot_results(mod_res_innsbruck, path_out, location = location, validation_data = data_innsbruck)
 
 
 
@@ -261,16 +429,125 @@ mod_res <- cso_model(population = 160000,
 
 
 
+
+
+
+# WIEN ------------------------------------------------------------------------------------------------------------------------
+data_vienna <- read_excel(file.path(path_intermediate_res, "model_prototype (3hourly)_Vienna_with_params_fixing_rows.xlsx"), sheet = 3)
+params <- data.table(k0 = 0.3, W0 = 1.5, dn = 29, dt = 2, W1 = 5, W2 = 1.5, dwf_per_capita = 0.2, qdwf = 0.55)
+mod_res_vienna_excel <- cso_model(population = 1897000,
+                     area = 140,
+                     share_served_by_CS = 0.5,
+                     time = data_vienna$DateValue,
+                     precipitation = data_vienna$P,
+                     # dwf_per_capita = params$dwf_per_capita,
+                     qdwf = params$qdwf, # from Excel, not sure how they got there
+                     W0 = params$W0,
+                     k0 = params$k0,
+                     dn = params$dn,
+                     dt = params$dt,
+                     W1 = params$W1,
+                     W2 = params$W2)
+location <- "Vienna_EXCEL"
+results_nam <- paste0(location, paste0("_lnB_A_", datum, "_y", substr(date_begin, 1, 4), "_",  substr(date_end, 1, 4)))
+path_out <- file.path(path_intermediate_res, results_nam)
+process_and_plot_results(mod_res_vienna_excel, path_out, location = location, validation_data = data_vienna, mask = 4:nrow(mod_res_vienna_excel))
+
 # validation -------------------------------------------------------------------------------------------------------------------
 
-validation_data <- data_innsbruck
+validation_data <- data_ecully
 #mask <- 37985:40904 # just 2014
 mask <- 3:46753
 #mask <- 31650:34577
-results_nam <- "Innsbruck_testing_k1_k2"
+results_nam <- "Ecully_testing_corr_eq"
 path_out <- file.path(path_intermediate_res, results_nam)
 
 process_and_plot_results(mod_res, validation_data, mask, path_out)
 
 
 
+
+
+
+########################################################
+# Wrapper function to apply cso_model
+########################################################
+
+#wrapper_cso_model <- function(id, ) # parallel processing über die einzelnen settlements, quasi-sequenziell
+
+
+########################################################
+# Using pre-processed precipitation and settlement data
+########################################################
+
+
+
+# get the gridcodes within Austria # in setup
+# load the precipiation values for these gridcodes
+# run model for all those gridcodes with the same (?) 6 parameters
+# aggregate results and compare to paper
+
+
+
+# import population data
+pop_dt <- readRDS(file.path(path_intermediate_res, "population.rds"))
+setDT(pop_dt, key = "settlement_id")
+pop_dt <- pop_dt[.(gridcode_to_process)]
+pop_dt[, population := as.integer(population)]
+
+
+# import impervious area data
+imp_dt <- readRDS(file.path(path_intermediate_res, "impervious_area.rds"))
+setDT(imp_dt, key = "settlement_id")
+imp_dt <- imp_dt[.(gridcode_to_process)]
+
+
+# Import precipitation data just for gridcodes needed
+prec_dt <- readRDS(file.path(path_intermediate_res, "precipitation_ts_settlements.rds")) #has gridcode, precipitation value in mm, timestamp
+setDT(prec_dt, key = "gridcode")
+prec_dt <- prec_dt[.(gridcode_to_process)]
+prec_dt <- prec_dt[time >= date_begin & time <= date_end]
+
+
+# Import share served by CS # will get that data, add to setup then
+share_dt <- data.table(gridcode = unique(prec_dt$gridcode), share_served_by_CS = 0.28, key = "gridcode")
+
+
+
+
+
+
+
+# apply cso_model to Vienna
+
+# params for Vienna from Excel, share CS guessed from their area # Add this to setup as well once figured out what to specify in case of all
+params <- data.table(k0 = 0.3, W0 = 1.5, dn = 29, dt = 2, W1 = 5, W2 = 1.5, dwf_per_capita = 0.2, qdwf = 0.55)
+
+# fix the time format (CET/CEST because of summer time, but I need the physical time)
+time_ts <- prec_dt$time
+time_phys <- as.POSIXct(
+    format(time_ts, "%Y-%m-%d %H:%M:%S"),
+    tz = "Etc/GMT-1"   # CET without DST
+)
+
+# applying the model
+mod_res <- cso_model(population = pop_dt$population,
+                     area = imp_dt$imp_area_km2,
+                     share_served_by_CS = share_dt$share_served_by_CS,
+                     time = time_phys,
+                     precipitation = prec_dt$precipitation_mm,
+                     dwf_per_capita = params$dwf_per_capita,
+                     # qdwf = params$qdwf, # from Excel, not sure how they got there
+                     W0 = params$W0,
+                     k0 = params$k0,
+                     dn = params$dn,
+                     dt = params$dt,
+                     W1 = params$W1,
+                     W2 = params$W2)
+
+# qdwf: pop_density * dwf_per_capita / timesteps_per_day / 1000 = 27100 * 0.2 / 8 / 1000 = 0.6775
+
+location <- "Vienna"
+results_nam <- paste0(location, paste0("_dwf02_", datum, "_y", substr(min_time, 1, 4), "_",  substr(max_time, 1, 4)))
+path_out <- file.path(path_intermediate_res, results_nam)
+process_and_plot_results(mod_res, path_out, location = location, validation_data = data_vienna, validation_area = 70)

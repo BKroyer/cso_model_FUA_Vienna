@@ -10,19 +10,18 @@ cso_model <- function(
     population = NA,                    # numeric. Population of the catchment area. Must be > 0. If not given, pop_density must be given.
     area = NA,                          # numeric impervious catchment area in km². Must be > 0. If not given, pop_density must be given.
     pop_density = NA,                   # population density in persons per km² impervious area served by CS. If missing is calculated from impervious area, population and share_served_by_CS.
-    share_served_by_CS = NA,            # share of population served by CS. According to Quaranta et al. (2022) mostly as the national average. If not given, pop_density must be given.
+    share_served_by_CS = NA,            # share of population served by CS. According to Quaranta et al. (2022) mostly as the national average. If not given, pop_density (by impervious area!) must be given.
     time,                               # vector containing the timestamps as posixct datatype.
     precipitation,                      # numeric. vector containing precipitation per timestep [mm].
     max_item = NA,                      # option to subset data, integer of maximum item index to be used, e.g. 100 for first 100 time steps
     dwf_per_capita = 0.2,               # Dry Weather Flow (DWF) per capita [m³/day/person]. Default: 0.2 m³/day/person (Quaranta et al. 2022).
     qdwf = NA,                          # The DWF in mm/timestep for entire area and population
-    W0 = 1.5,    # W0 Maximum surface storage capacity of the catchment (water retained on impervious surfaces
-                                        # before runoff begins) [mm]. Default: 1.5 mm (Quaranta et al. 2022)
-    k0 = 0.3,# k0 Reservoir constant for surface storage [1/timestep].Default: 0.3/(3 hours) (represents depletion of surface storage during dry periods).
-    dn = 9.1,    # Dilution rate of the sewer network [-]. Defines the maximum network capacity relative to DWF. Default: 9.1.
-    dt = 9,         # Dilution rate of the tank [-]. Defines the maximum tank outflow capacity relative to DWF. Default: 9.
-    W1 = 1,                # Network storage capacity [mm]. Default: 1 mm (storage capacity of the sewer network before overflow).
-    W2 = 0.45                 # Tank storage capacity [mm]. Default: 0.45 mm (capacity of the retention tank before overflow).
+    W0 = 1.5,                           # W0 Maximum surface storage capacity of the catchment (water retained on impervious surfaces before runoff begins) [mm]. Default: 1.5 mm (Quaranta et al. 2022)
+    k0 = 0.3,                           # k0 Reservoir constant for surface storage [1/timestep].Default: 0.3/(3 hours) (represents depletion of surface storage during dry periods).
+    dn = 9.1,                           # Dilution rate of the sewer network [-]. Defines the maximum network capacity relative to DWF. Default: 9.1.
+    dt = 9,                             # Dilution rate of the tank [-]. Defines the maximum tank outflow capacity relative to DWF. Default: 9.
+    W1 = 1,                             # Network storage capacity [mm]. Default: 1 mm (storage capacity of the sewer network before overflow).
+    W2 = 0.45                           # Tank storage capacity [mm]. Default: 0.45 mm (capacity of the retention tank before overflow).
     ){
 
     ## Check input data type
@@ -42,6 +41,9 @@ cso_model <- function(
     assert_number(W2, na.ok = FALSE, lower = 0.05, upper = 7,  null.ok = FALSE) # max was 5
 
     ### basic parameter calculation
+    if (length(unique(diff(time))) != 1){
+        errorCondition(cat("Irregular time steps: ", unique(diff(time))))
+    }
     time_step <- min(diff(time))
     timesteps_per_day <- 24/as.integer(time_step)
     if ((is.na(area) | is.na(population) | is.na(share_served_by_CS)) & is.na(pop_density)){
@@ -66,8 +68,8 @@ cso_model <- function(
 
 
     print(paste0("k0 is ", k0, " 1/timestep"))
-    print(paste0("k1 is ", k1, " 1/timestep"))
-    print(paste0("k2 is ", k2, " 1/timestep"))
+    print(paste0("k1 is ", round(k1, 4), " 1/timestep"))
+    print(paste0("k2 is ", round(k2, 4), " 1/timestep"))
 
     print(paste0("W0 is ", W0, " mm"))
     print(paste0("W1 is ", W1, " mm"))
@@ -78,7 +80,7 @@ cso_model <- function(
 
     print(paste0("qdwf is ", qdwf))
     print(paste0("time step is ", time_step," hours"))
-    print(paste0("the population density is ", pop_density, " cap/km²_imp"))
+    print(paste0("the population density is ", round(pop_density, 2), " cap/km²_imp"))
 
 
 
@@ -90,7 +92,7 @@ cso_model <- function(
         data <- data.table(time = time[1:max_item], precipitation = precipitation[1:max_item], key = "time")
     }
 
-    print(paste0("The mean annual precipitation is ",mean(data$precipitation, na.rm=T) * 8 * 365," mm/year"))
+    print(paste0("The mean annual precipitation is ", round(mean(data$precipitation, na.rm=T) * 8 * 365, 2)," mm/year"))
 
     # save area (the impervious one!) to data for validation purposes later
     data[, area := area * share_served_by_CS]
@@ -108,7 +110,7 @@ cso_model <- function(
     data[, surface_storage := v]
 
     ### Runoff (Rainfall that reaches the network) R(t) ### Equation 2
-    data[, runoff := pmax(0, precipitation - (W0 - shift(surface_storage)))]
+    data[, runoff := pmax(0, precipitation - (W0 - data.table::shift(surface_storage)))]
     data[1, runoff := pmax(0, data$precipitation[2] - W0 + data$surface_storage[2] - data$surface_storage[1])] # S0-1 not known. Instead Runoff estimated via what must have been excess at t=1 to get from S0 to S1 (rain first logic: P (Rain), St, R)
 
 
@@ -120,7 +122,7 @@ cso_model <- function(
         v[t] <- (data$runoff[t] + qdwf) * (1 - exp(-k1)) +
             v[t - 1] * exp(-k1)
 
-    # Barcelona
+    # Barcelona / Santiago (but autor confirmed eq 4 is the correct one)
     # for (t in 2:nrow(data)) {
     #     v[t] <- (data$runoff[t] + qdwf)
 
@@ -131,12 +133,12 @@ cso_model <- function(
 
     ### Worst case overflow E(t) ### Equation 3 (overflow volume if no buffering capacity of the sewer network)
     data[ , worst_case_overflow := pmax(runoff + qdwf - k1W1, 0)]
-    # Formula for Vienna more complicated. Ask Nina.
+    # Formula for Vienna more complicated. Ask Nina. ?? does not look any different in the Excel file
 
 
     # adding A and B terms to check results
     data[, A := runoff + qdwf - k1 * W1]
-    data[, B := runoff + qdwf - shift(network_flow, 1L)] # default is type 'lag', so 1L means one previous timestep
+    data[, B := runoff + qdwf - data.table::shift(network_flow, 1L)] # default is type 'lag', so 1L means one previous timestep
 
 
     ### Scenario in one step ### Implementation checked by Steffen, just changed from function to direct data.table assignment
@@ -168,6 +170,14 @@ cso_model <- function(
         ratio_A_B <- A / B
         safe_ratio_A_B <- ifelse(ratio_A_B > 0, ratio_A_B, NA_real_)
 
+
+        Eprime_b <- if (!ln_A_B) {
+            A * (1 - (1 + log(ratio)) / k1) + B / k1 * exp(-k1)
+        } else {
+            A * (1 - (1 + log(safe_ratio_A_B)) / k1) + B / k1 * exp(-k1)
+        }
+
+
         Eprime <- fcase(
 
             # scenario a:
@@ -175,14 +185,9 @@ cso_model <- function(
             A - B / k1 * (1 - exp(-k1)),
 
             # scenario b:
-            ## ln(A/B) in the Excel files, I think B/A is correct, but set to A/B to compare to Excel
+            ## ln(A/B) in the Excel files, I think B/A is correct (and seems like it, see email), but set to A/B to compare to Excel
             scenario == "b",
-            A * (1 - (1 + log(ratio)) / k1) +
-                B / k1 * exp(-k1),
-
-            # scenario == "b",
-            # A * (1 - (1 + log(safe_ratio_A_B)) / k1) +
-            #     B / k1 * exp(-k1),
+            Eprime_b,
 
             # scenario c:
             scenario == "c",
@@ -283,7 +288,7 @@ cso_model <- function(
 
 
     ### tau2 ### equation 11 in appendix B
-    data[, part1 := k1 * W1 - k2 * shift(tank_volume_W)]
+    data[, part1 := k1 * W1 - k2 * data.table::shift(tank_volume_W)]
     data[, part2 := k1 * W1 - k2 * W2]
     data[, tau2 :=  fifelse((part2 != 0 & (part1/part2) > 0), pmax(0, pmin(1, log(part1/part2) / k2)), 0)]
     # The if conditions should never happen, it makes no sense to build a tank with greater conveyance than the network
@@ -326,29 +331,29 @@ cso_model <- function(
     ### Ed(t) ### Equation 20 (?) in appendix B
 
     data[, Ed := fifelse(
-        shift(data$tank_volume) < W2,
+        data.table::shift(data$tank_volume) < W2,
         # case: tank not full at previous timestep
         (runoff + qdwf - k2 * W2) * (1 - t2_1) +
-            (runoff + qdwf - shift(data$network_flow)) / k1 *
+            (runoff + qdwf - data.table::shift(data$network_flow)) / k1 *
             (exp(-k1) - exp(-k1 * t2_1)),
 
         # case: tank full at previous timestep
         (runoff + qdwf - k2 * W2) * t2_1 +
-            (t2_1 + qdwf - shift(data$network_flow)) / k1 *
+            (t2_1 + qdwf - data.table::shift(data$network_flow)) / k1 *
             (exp(-k1 * t2_1) - 1)
     )]
 
 
 
     ### t2_2 ###
-    data[ ,t2_2 := pmin(1, (shift(tank_volume_W) - W2) / (shift(tank_volume_W) - virtual_volume_b)) * tau1]
+    data[ ,t2_2 := pmin(1, (data.table::shift(tank_volume_W) - W2) / (data.table::shift(tank_volume_W) - virtual_volume_b)) * tau1]
 
 
     ### Eb ###
     data[, Eb :=
              fifelse(
                  ((W1 * k1 - k2 * W2) != 0 & ((W1 * k1 - virtual_volume_b_t1 * k2)/(W1 * k1 - k2 * W2)) > 0),
-                 (runoff + qdwf - k2 * W2) * (tau1 - t2_2) + (runoff + qdwf - shift(network_flow)) / k1 *
+                 (runoff + qdwf - k2 * W2) * (tau1 - t2_2) + (runoff + qdwf - data.table::shift(network_flow)) / k1 *
                      (exp(-k1 * tau1) - exp(-k1 * t2_2)) +
                      (W1 * k1 - k2 * W2) *
                      (1 - pmin(1, tau1 + pmax(0, log((W1 * k1 - virtual_volume_b_t1 * k2) / # tau1 capped at 1 here
@@ -383,15 +388,15 @@ cso_model <- function(
 
     ### Rain_event ### # == spill numbers in Excel; 1 = start; 2 = rain continues; 0 = no rain
     data[, rain_event := fifelse(
-        shift(precipitation) == 0 & precipitation > 0, 1L,
+        data.table::shift(precipitation) == 0 & precipitation > 0, 1L,
         fifelse(
-            shift(precipitation) > 0 & precipitation > 0, 2L,
+            data.table::shift(precipitation) > 0 & precipitation > 0, 2L,
             0L
         )
     )]
 
     ### Frequency overflow ### # not used further, not found in Excel, marks overflow events, so can be used later to calculate how many events there were
-    data[, frequency_overflow := fifelse(duration == 1 & shift(duration, type = "lead") == 0, 1, 0)] # no , fill = 0 means NA in first row
+    data[, frequency_overflow := fifelse(duration == 1 & data.table::shift(duration, type = "lead") == 0, 1, 0)] # no , fill = 0 means NA in first row
 
     ### Total overflow ###
     data[, total_overflow := tank_overflow + network_overflow]
@@ -399,7 +404,7 @@ cso_model <- function(
     ### CSO and Rain volumes per rain event
     # already gives total at event end, was cumulative and then total before; this is per RAIN event as in Barcelona
     # marking end of rain event to simplify the cso volume per event calculation (where rain_event==2 or 1 transitions to 0)
-    data[, rain_end := fifelse(rain_event != 0 & shift(rain_event, type = "lead", fill = 0) == 0, 1L, 0L)]
+    data[, rain_end := fifelse(rain_event != 0 & data.table::shift(rain_event, type = "lead", fill = 0) == 0, 1L, 0L)]
 
     data[, cso_volume_per_event := 0]  # initialize
     data[, rain_volume_per_event := 0]

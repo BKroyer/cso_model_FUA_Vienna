@@ -8,7 +8,7 @@ munging: TRUE
 logging: FALSE
 logging_level: INFO
 load_libraries: TRUE
-libraries: terra, data.table, exactextractr, readxl, ggplot2, roxygen2
+libraries: terra, data.table, exactextractr, readxl, ggplot2, roxygen2, openxlsx
 as_factors: FALSE
 tables_type: data.table
 attach_internal_libraries: FALSE

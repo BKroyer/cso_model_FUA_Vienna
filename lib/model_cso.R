@@ -81,6 +81,7 @@ cso_model <- function(
     print(paste0("qdwf is ", qdwf))
     print(paste0("time step is ", time_step," hours"))
     print(paste0("the population density is ", round(pop_density, 2), " cap/km²_imp"))
+    print(paste0("CS share is ", round(share_served_by_CS, 4)))
 
 
 
@@ -122,7 +123,7 @@ cso_model <- function(
         v[t] <- (data$runoff[t] + qdwf) * (1 - exp(-k1)) +
             v[t - 1] * exp(-k1)
 
-    # Barcelona / Santiago (but autor confirmed eq 4 is the correct one)
+    # Barcelona / Santiago (but author confirmed eq 4 is the correct one)
     # for (t in 2:nrow(data)) {
     #     v[t] <- (data$runoff[t] + qdwf)
 

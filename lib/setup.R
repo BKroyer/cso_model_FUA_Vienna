@@ -22,7 +22,7 @@ date_end <- "2020-12-31"
 
 # Area of interest ---------------------------------------------------------------------------------------------------------------
 
-area_of_interest <- "Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp" # "Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp"
+area_of_interest <- "Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp" # "Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp" # "Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp"
 settlements <- "Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp"
 
 # Gridcode specification (NULL to process all within AoI, else vector of gridcodes to process) -----------------------------------

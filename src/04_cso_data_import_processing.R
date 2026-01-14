@@ -35,7 +35,7 @@ setkey(imp_dt, settlement_id)
 
 # Import precipitation data just for gridcodes needed
 prec_dt <- readRDS(file.path(path_intermediate_res, "precipitation_ts_settlements.rds")) #has gridcode, precipitation value in mm, timestamp
-setkey(prec_dt, gridcode, time)
+# setkey(prec_dt, gridcode, time)
 prec_dt <- prec_dt[gridcode %in% gridcode_to_process &  time >= date_begin & time <= date_end] # if too slow, change to data.table filtering but mind the two keys
 
 prec_dt$time <- as.POSIXct( # fix the time format (CET/CEST because of summer time, but I need the physical time)
@@ -44,7 +44,11 @@ prec_dt$time <- as.POSIXct( # fix the time format (CET/CEST because of summer ti
 )
 
 # Import share served by CS # will get that data, properly add to setup then
-share_dt <- data.table(gridcode = unique(prec_dt$gridcode), share_served_by_CS = rep(0.28, length(gridcode_to_process)), key = "gridcode")
+# share_dt <- data.table(gridcode = unique(prec_dt$gridcode), share_served_by_CS = rep(0.28, length(gridcode_to_process)), key = "gridcode")
+share_dt <- readRDS(file.path(path_intermediate_res, "share_CS.rds"))
+setDT(share_dt, key = "gridcode")
+share_dt <- share_dt[.(gridcode_to_process)]
+setkey(share_dt, gridcode)
 
 
 
@@ -53,7 +57,7 @@ share_dt <- data.table(gridcode = unique(prec_dt$gridcode), share_served_by_CS =
 
 plan(multisession, workers = availableCores() - 2)
 
-gridcodes <- params$gridcode[1:3]
+gridcodes <- params$gridcode[1]
 
 mod_results <- future_map(
     gridcodes,
@@ -71,7 +75,7 @@ walk(mod_results, function(wb_path) {
     path_temp <- wb_path$path_out
     # Extract gridcode from first sheet
     sheet_name <- names(wb_temp)[1]
-    gc <- sub("params_", "", sheet_name)
+    gc <- sub("CSnew_params_", "", sheet_name)
 
     saveWorkbook(
         wb_temp,

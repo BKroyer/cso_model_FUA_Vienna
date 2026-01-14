@@ -12,6 +12,7 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
 
     # extract single rows
     p     <- params[gridcode == gridcode_temp]
+    print(p)
     pop   <- pop_dt[settlement_id  == gridcode_temp]
     imp   <- imp_dt[settlement_id  == gridcode_temp]
     share <- share_dt[gridcode == gridcode_temp]
@@ -48,7 +49,16 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
     #res_dt[, gridcode := gridcode]
 
     # save used values
-    used_vals <- cbind(p, pop$population, imp$imp_area_km2, share$share_served_by_CS)
+    # used_vals <- cbind(p, pop$population, imp$imp_area_km2, share$share_served_by_CS)
+    used_vals <- cbind(
+        p,
+        population = pop$population,
+        imp_area_km2 = imp$imp_area_km2,
+        share_served_by_CS = share$share_served_by_CS
+    )
+
+    min_time <- min(prec$time)
+    max_time <- max(prec$time)
 
     location <- as.character(gridcode_temp)
     results_nam <- paste0(location, paste0("_", datum, "_y", substr(min_time, 1, 4), "_",  substr(max_time, 1, 4)))
@@ -77,7 +87,7 @@ wrapper_preprocess_data <- function(area_of_interest, settlements){
     ### Settlements
     # thesis: agglo.shp from Pistoccio 2022
     settlements <- vect(settlements)
-    settlements_id <- "settlements_id"
+    # settlements_id <- "settlements_id"
     settlements_epsg3035 <- project(settlements, "EPSG:3035")
     urb_3035 <- crop(settlements_epsg3035, aoi_epsg3035)
     #all(is.valid(urb_3035)) # check validity of geometries. Should result in TRUE (did results in TRUE Oct31)

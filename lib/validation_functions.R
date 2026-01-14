@@ -243,7 +243,7 @@ process_and_plot_results <- function(mod_res, path_out, used_params, validation_
 
     sheet <- paste0("params_", location)
     addWorksheet(wb, sheet)
-    writeData(wb, sheet, params, colNames = TRUE)
+    writeData(wb, sheet, used_params, colNames = TRUE)
     setColWidths(wb, sheet, cols = 1:10, widths = 15)
 
     sheet <- paste0("overflow_", location)

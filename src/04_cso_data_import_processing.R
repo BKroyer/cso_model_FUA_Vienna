@@ -1,6 +1,10 @@
 # Script to run cso model on time series
 # Written by Steffen Kittlaus based on a draft by Nina Kleemeyer
 # Heavily modified by Bettina Kroyer
+
+rm(list=ls())
+
+
 library(ProjectTemplate)
 load.project()
 
@@ -36,7 +40,16 @@ setkey(imp_dt, settlement_id)
 # Import precipitation data just for gridcodes needed
 prec_dt <- readRDS(file.path(path_intermediate_res, "precipitation_ts_settlements.rds")) #has gridcode, precipitation value in mm, timestamp
 # setkey(prec_dt, gridcode, time)
-prec_dt <- prec_dt[gridcode %in% gridcode_to_process &  time >= date_begin & time <= date_end] # if too slow, change to data.table filtering but mind the two keys
+# prec_dt <- prec_dt[gridcode %in% gridcode_to_process &  time >= date_begin & time <= date_end] # if too slow, change to data.table filtering but mind the two keys
+
+
+
+setkey(prec_dt, gridcode, time)
+
+prec_dt <- prec_dt[
+    data.table(gridcode = unique(gridcode_to_process)),
+    on = .(gridcode)
+    ][time >= date_begin & time <= date_end]
 
 prec_dt$time <- as.POSIXct( # fix the time format (CET/CEST because of summer time, but I need the physical time)
     format(prec_dt$time, "%Y-%m-%d %H:%M:%S"),
@@ -55,52 +68,118 @@ setkey(share_dt, gridcode)
 
 # apply cso_model to gridcodes_to_process (real data) ---------------------------------------------------------------------------------------
 
-plan(multisession, workers = availableCores() - 2)
+plan(multisession, workers = availableCores() - 1)
 
-gridcodes <- params$gridcode[1]
+# run if future crashed
+# plan(sequential)
+# gc()
+
 
 mod_results <- future_map(
-    gridcodes,
+    gridcode_to_process,
     run_cso_for_single_gridcode,
     params = params,
     pop_dt = pop_dt,
     imp_dt = imp_dt,
     share_dt = share_dt,
     prec_dt = prec_dt,
-    .options = furrr_options(seed = TRUE)
+    save_single_files = save_single_files,
+    print_params = FALSE,
+    .options = furrr_options(seed = 123)
 )
 
-walk(mod_results, function(wb_path) {
-    wb_temp <- wb_path$wb
-    path_temp <- wb_path$path_out
-    # Extract gridcode from first sheet
-    sheet_name <- names(wb_temp)[1]
-    gc <- sub("CSnew_params_", "", sheet_name)
+if (save_single_files){
+    walk(mod_results, function(wb_path) {
+        wb_temp <- wb_path$wb
+        path_temp <- wb_path$path_out
+        # Extract gridcode from first sheet
+        sheet_name <- names(wb_temp)[1]
+        gc <- sub("CSnew_params_", "", sheet_name)
 
-    saveWorkbook(
-        wb_temp,
-        file.path(path_temp, paste0("cso_summaries_", gc, ".xlsx")),
-        overwrite = TRUE
+        saveWorkbook(
+            wb_temp,
+            file.path(path_temp, paste0("cso_summaries_", gc, ".xlsx")),
+            overwrite = TRUE
+        )
+    })
+}else{
+
+    dt_params <- rbindlist(
+        lapply(mod_results, `[[`, 1),
+        use.names = TRUE,
+        fill = TRUE
     )
-})
 
-# mod_res <- cso_model(population = pop_dt$population,
-#                      area = imp_dt$imp_area_km2,
-#                      share_served_by_CS = share_dt$share_served_by_CS,
-#                      time = time_phys,
-#                      precipitation = prec_dt$precipitation_mm,
-#                      dwf_per_capita = params$dwf_per_capita,
-#                      W0 = params$W0,
-#                      k0 = params$k0,
-#                      dn = params$dn,
-#                      dt = params$dt,
-#                      W1 = params$W1,
-#                      W2 = params$W2)
+    dt_results <- rbindlist(
+        lapply(mod_results, `[[`, 2),
+        use.names = TRUE,
+        fill = TRUE
+    )
 
 
+    summarized_stats <- as.data.table(t(colSums(dt_results, na.rm=T)), keep.rownames = TRUE) # ignore the gridcode sum
 
-# single gridcode validation --------------------------------------------------------------------------------------------------------------------------------
-# location <- "Vienna"
-# results_nam <- paste0(location, paste0("_", datum, "_y", substr(min_time, 1, 4), "_",  substr(max_time, 1, 4)))
-# path_out <- file.path(path_intermediate_res, results_nam)
-# process_and_plot_results(mod_res, path_out, location = location, validation_data = data_vienna, validation_area = 70)
+
+    summary_overflow <- data.table(
+        metric = c("total population", "total impervious area served by CS [m²]","network [mm]", "tank [mm]", "total [mm]", "total [Mm3y]"),
+        model  = round(c(summarized_stats$population,
+                         summarized_stats$imp_area_served_by_CS_km2,
+                         summarized_stats$annual_mean_network_mm,
+                         summarized_stats$annual_mean_tank_mm,
+                         summarized_stats$total_overflow_mm,
+                         summarized_stats$total_overflow_Mm3y), round_to),
+        validation = c(NA, round(c(summarized_stats$validation_area,
+                    summarized_stats$annual_mean_network_orig,
+                    summarized_stats$annual_mean_tank_orig,
+                    summarized_stats$total_overflow_orig,
+                    summarized_stats$total_overflow_Mm3y_orig), round_to))
+        )
+
+    # change the sum here, does not make sense for the duration if multiple gridcodes, might have same hour overflow
+    event_metrics <- data.table(
+        # metric = c("CSO duration (hrs/y)", "CSO volume per event (mm)"),
+        # value  = round(c(summarized_stats$overflow_duration, summarized_stats$cso_volume_per_event), round_to)
+    )
+
+    wb <- createWorkbook()
+
+    widths_temp <- 23
+    cols_temp <- 20
+
+    sheet <- "used_params"
+    addWorksheet(wb, sheet)
+    writeData(wb, sheet, dt_params)
+    setColWidths(wb, sheet, cols = 1:cols_temp, widths = widths_temp)
+
+    sheet <- "results_per_gridcode"
+    addWorksheet(wb, sheet)
+    cols_to_round <- c(2, 4:14)
+    dt_results[, (cols_to_round) := lapply(.SD, round, digits = round_to),
+               .SDcols = cols_to_round]
+    writeData(wb, sheet, dt_results, rowNames = FALSE)
+    setColWidths(wb, sheet, cols = 1:cols_temp, widths = widths_temp)
+
+    sheet <- "overflow"
+    addWorksheet(wb, sheet)
+    writeData(wb, sheet, summary_overflow)
+    setColWidths(wb, sheet, cols = 1:cols_temp, widths = widths_temp)
+
+    sheet <- paste0("event_metrics")
+    addWorksheet(wb, sheet)
+    writeData(wb, sheet, event_metrics)
+    setColWidths(wb, sheet, cols = 1:cols_temp, widths = widths_temp)
+
+
+    if (length(gridcode_to_process) > 5){
+        results_nam <- paste0(area_of_interest_name, paste0("_", datum), ".xlsx")
+
+    }else{
+        results_nam <- paste0(paste(gridcode_to_process, collapse = "_"), paste0("_", datum), ".xlsx")
+
+    }
+    path_out <- file.path(path_intermediate_res, results_nam)
+    saveWorkbook(wb, path_out, overwrite = TRUE)
+
+}
+
+

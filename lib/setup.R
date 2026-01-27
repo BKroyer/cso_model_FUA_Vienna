@@ -4,13 +4,20 @@
 already_processed <- TRUE
 datum <- format(Sys.Date(), format="%b%d") # for naming reasons
 ln_A_B <- FALSE # calculating with typo in ln network flow scenario b?
+round_to <- 4 # number of digits to round results to (only applied to final results)
 
+
+# Data paths ---------------------------------------------------------------------------------------------------------------------
+
+path_intermediate_res <- file.path("data", "intermediate_results") # for the results and processed input data
+path_raw_nc <- file.path(path_intermediate_res, "nc_raw") # for the precipitation data extraction for settlements
+path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped") # for the precipitation data extraction for settlements
 
 
 # Time period of interest (Used in precipitation data extraction & mask when applying model) -------------------------------------
 
-date_begin <- "2010-01-01"
-date_end <- "2020-12-31"
+date_begin <- "2010-01-01" # 2010-01-01
+date_end <- "2016-12-31" # 2020-12-31
 
 # used for precipitation extraction originally:
 # date_begin <- "2010-12-15"
@@ -22,22 +29,26 @@ date_end <- "2020-12-31"
 
 # Area of interest ---------------------------------------------------------------------------------------------------------------
 
-area_of_interest <- "Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp" # "Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp" # "Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp"
-settlements <- "Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp"
+area_of_interest <- file.path(path_intermediate_res, "FUA_vienna", "FUA_vienna.shp") # "Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp" # "Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp"
+area_of_interest_name <- "FUA_Vienna_paper_dafault_2010_2016" #Austria_default_params
+settlements <- "Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp" # else FUA
 
 # Gridcode specification (NULL to process all within AoI, else vector of gridcodes to process) -----------------------------------
 
-gridcode_to_process <- c(253253, 261635, 259334, 266367, 265844) # 253253 is wien, the others are random to test multiple processing
+gridcode_to_process <- c(253253) #c(253253, 261635) # 253253 is wien, the others are random to test multiple processing #, 259334, 266367, 265844
 
 # model params for the gridcodes, either one for all or one per gridcode (vector of length of gridcodes)
 
 k0 <- 0.3
 W0 <- 1.5
-dn <- 29
-dt <- 2
+dn <- 7 #29
+dt <- 4#2
 W1 <- 5
 W2 <- 1.5
 dwf_per_capita <- 0.2
+
+# save gridcodes one by one or summarise over all?
+save_single_files = FALSE # if TRUE, one Excel file is created per gridcode
 
 
 # Data processing / calling -------------------------------------------------------------------------------------------------------

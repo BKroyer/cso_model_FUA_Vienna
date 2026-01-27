@@ -46,7 +46,8 @@ plot_compare_data <- function(var_nam, compare_data, path_out){
     )
 }
 
-process_and_plot_results <- function(mod_res, path_out, used_params, validation_data = NULL, validation_area = NULL, location = "", mask = NULL, time_step = 3, round_to = 4){
+process_and_plot_results <- function(mod_res, path_out, used_params, validation_data = NULL, validation_area = NULL, location = "", mask = NULL,
+                                     time_step = 3, round_to = 4, save_single_files = FALSE, gridcode_temp = gridcode_temp){
     #' @param mod_res the model result data frame (output of model_cso)
     #' @param path_out path to save the plots to; will be created but not overwritten
     #' @param used_params data.table of the parameters used in that model run, to be saved to results tables
@@ -70,6 +71,8 @@ process_and_plot_results <- function(mod_res, path_out, used_params, validation_
     if (is.null(validation_area)){
         validation_area <- area
     }
+
+    population <- used_params$population
 
 
     if (is.null(mask)){
@@ -98,9 +101,14 @@ process_and_plot_results <- function(mod_res, path_out, used_params, validation_
 
     print(paste0("Aligned common timeframe: ",min_time, " to ", max_time))
 
+    # give warnings if aligned timeframe below one year
+    if (difftime(max_time, min_time, units = "days") < 365){
+        warning(paste0("Gridcode ", gridcode_temp, " has less than one year of aligned data, may not be representing annual volumes correctly."))
+    }
+
     # specify actual timeframe for naming later
-    assign("min_time", min_time)
-    assign("max_time", max_time)
+    #assign("min_time", min_time)
+    #assign("max_time", max_time)
 
 
 
@@ -163,9 +171,9 @@ process_and_plot_results <- function(mod_res, path_out, used_params, validation_
 
 
     if (!is.na(area)) {
-        total_overflow_Mm3y <- round(total_overflow * area / 1000, round_to)
+        total_overflow_Mm3y <- total_overflow * area / 1000
         if (has_validation) {
-            total_overflow_Mm3y_orig <- round(total_overflow_orig * validation_area / 1000, round_to)
+            total_overflow_Mm3y_orig <- total_overflow_orig * validation_area / 1000
         }
     } else {
         total_overflow_Mm3y <- NA
@@ -181,106 +189,134 @@ process_and_plot_results <- function(mod_res, path_out, used_params, validation_
 
 
 
+    if (save_single_files){
+        cat("\n--- CSO summary ---\n")
+        cat("CSO duration (mean): ",
+            round(overflow_duration, round_to), " hrs/year\n")
 
-    cat("\n--- CSO summary ---\n")
-    cat("CSO duration (mean): ",
-        round(overflow_duration, round_to), " hrs/year\n")
+        cat("CSO volume per event: ",
+            round(cso_volume_per_event, round_to), " mm/event\n\n")
 
-    cat("CSO volume per event: ",
-        round(cso_volume_per_event, round_to), " mm/event\n\n")
+        cat("Network overflow: ",
+            round(annual_mean_network, round_to), " mm/y",
+            if (has_validation)
+                paste0(" (validation: ",
+                       round(annual_mean_network_orig, round_to), " mm/y)"),
+            "\n")
 
-    cat("Network overflow: ",
-        round(annual_mean_network, round_to), " mm/y",
-        if (has_validation)
-            paste0(" (validation: ",
-                   round(annual_mean_network_orig, round_to), " mm/y)"),
-        "\n")
+        cat("Tank overflow: ",
+            round(annual_mean_tank, round_to), " mm/y",
+            if (has_validation)
+                paste0(" (validation: ",
+                       round(annual_mean_tank_orig, round_to), " mm/y)"),
+            "\n")
 
-    cat("Tank overflow: ",
-        round(annual_mean_tank, round_to), " mm/y",
-        if (has_validation)
-            paste0(" (validation: ",
-                   round(annual_mean_tank_orig, round_to), " mm/y)"),
-        "\n")
+        cat("Total overflow: ",
+            round(total_overflow, round_to), " mm/y",
+            if (has_validation)
+                paste0(" (validation: ",
+                       round(total_overflow_orig, round_to), " mm/y)"),
+            "\n")
 
-    cat("Total overflow: ",
-        round(total_overflow, round_to), " mm/y",
-        if (has_validation)
-            paste0(" (validation: ",
-                   round(total_overflow_orig, round_to), " mm/y)"),
-        "\n")
-
-    cat("Total overflow: ",
-        total_overflow_Mm3y, " Mm³/y",
-        if (has_validation)
-            paste0(" (validation: ", total_overflow_Mm3y_orig, " Mm³/y)"),
-        "\n")
-
-
-    ## SUMMARY TABLES =======
-
-    summary_overflow <- data.table(
-        metric = c("network [mm]", "tank [mm]", "total [mm]", "total [Mm3y]"),
-        model  = round(c(annual_mean_network,
-                         annual_mean_tank,
-                         total_overflow,
-                         total_overflow_Mm3y), round_to),
-        validation = if (has_validation)
-            round(c(annual_mean_network_orig,
-                    annual_mean_tank_orig,
-                    total_overflow_orig,
-                    total_overflow_Mm3y_orig), round_to)
-        else NA_real_
-    )
-
-    event_metrics <- data.table(
-        metric = c("CSO duration (hrs/y)", "CSO volume per event (mm)"),
-        value  = round(c(overflow_duration, cso_volume_per_event), round_to)
-    )
+        cat("Total overflow: ",
+            round(total_overflow_Mm3y, round_to), " Mm³/y",
+            if (has_validation)
+                paste0(" (validation: ", round(total_overflow_Mm3y_orig, round_to), " Mm³/y)"),
+            "\n")
 
 
-    wb <- createWorkbook()
+        ## SUMMARY TABLES =======
 
-    sheet <- paste0("params_", location)
-    addWorksheet(wb, sheet)
-    writeData(wb, sheet, used_params, colNames = TRUE)
-    setColWidths(wb, sheet, cols = 1:10, widths = 15)
+        summary_overflow <- data.table(
+            metric = c("network [mm]", "tank [mm]", "total [mm]", "total [Mm3y]"),
+            model  = round(c(annual_mean_network,
+                             annual_mean_tank,
+                             total_overflow,
+                             total_overflow_Mm3y), round_to),
+            validation = if (has_validation)
+                round(c(annual_mean_network_orig,
+                        annual_mean_tank_orig,
+                        total_overflow_orig,
+                        total_overflow_Mm3y_orig), round_to)
+            else NA_real_
+        )
 
-    sheet <- paste0("overflow_", location)
-    addWorksheet(wb, sheet)
-    writeData(wb, sheet, summary_overflow)
-    setColWidths(wb, sheet, cols = 1:3, widths = 25)
-
-    sheet <- paste0("event_metrics_", location)
-    addWorksheet(wb, sheet)
-    writeData(wb, sheet, event_metrics)
-    setColWidths(wb, sheet, cols = 1:3, widths = 25)
-
-    # fwrite(
-    #     summary_overflow,
-    #     file = file.path(path_out,
-    #                      paste0("summary_overflow_", location, ".csv"))
-    # )
-
-    #
-    # fwrite(
-    #     event_metrics,
-    #     file = file.path(path_out,
-    #                      paste0("summary_event_metrics_", location, ".csv"))
-    # )
-
-    #saveWorkbook(wb, file = file.path(path_out, paste0("cso_summaries_", location, ".xlsx")), overwrite = TRUE)
+        event_metrics <- data.table(
+            metric = c("CSO duration (hrs/y)", "CSO volume per event (mm)"),
+            value  = round(c(overflow_duration, cso_volume_per_event), round_to)
+        )
 
 
-    ## RETURN ========
+        wb <- createWorkbook()
 
-    invisible(list(
-        summary_overflow = summary_overflow,
-        event_metrics = event_metrics
-    ))
+        sheet <- paste0("params_", location)
+        addWorksheet(wb, sheet)
+        writeData(wb, sheet, used_params, colNames = TRUE)
+        setColWidths(wb, sheet, cols = 1:10, widths = 15)
 
-    return(list(
-        wb = wb,
-        path_out = path_out
-    ))
+        sheet <- paste0("overflow_", location)
+        addWorksheet(wb, sheet)
+        writeData(wb, sheet, summary_overflow)
+        setColWidths(wb, sheet, cols = 1:3, widths = 25)
+
+        sheet <- paste0("event_metrics_", location)
+        addWorksheet(wb, sheet)
+        writeData(wb, sheet, event_metrics)
+        setColWidths(wb, sheet, cols = 1:3, widths = 25)
+
+        # fwrite(
+        #     summary_overflow,
+        #     file = file.path(path_out,
+        #                      paste0("summary_overflow_", location, ".csv"))
+        # )
+
+        #
+        # fwrite(
+        #     event_metrics,
+        #     file = file.path(path_out,
+        #                      paste0("summary_event_metrics_", location, ".csv"))
+        # )
+
+        #saveWorkbook(wb, file = file.path(path_out, paste0("cso_summaries_", location, ".xlsx")), overwrite = TRUE)
+
+
+        ## RETURN ========
+
+        invisible(list(
+            summary_overflow = summary_overflow,
+            event_metrics = event_metrics
+        ))
+
+        return(list(
+            # has_validation = has_validation,
+            wb = wb,
+            path_out = path_out
+        ))
+    }else{ # save mm results for tank, network, total as rows
+
+        collected_res_mm <- data.table(
+            # gridcode = is added later
+            imp_area_served_by_CS_km2 = area,
+            population = population,
+            annual_mean_tank_mm = annual_mean_tank, #mm
+            annual_mean_network_mm = annual_mean_network, #mm
+            total_overflow_mm = total_overflow, #mm
+            total_overflow_Mm3y = total_overflow_Mm3y,
+            annual_mean_network_orig = if (has_validation) annual_mean_network_orig else NA_real_,
+            annual_mean_tank_orig = if (has_validation) annual_mean_tank_orig else NA_real_,
+            total_overflow_orig = if (has_validation) total_overflow_orig else NA_real_,
+            total_overflow_Mm3y_orig = if (has_validation) total_overflow_Mm3y_orig else NA_real_,
+            validation_area = if (has_validation) validation_area else NA_real_,
+            overflow_duration = overflow_duration,
+            cso_volume_per_event = cso_volume_per_event
+        )
+
+        return(list(
+            used_params = used_params,
+            collected_res_mm = collected_res_mm))
+
+        # list(has_validation = has_validation,
+        #     collected_res_mm = collected_res_mm)
+    }
+
 }

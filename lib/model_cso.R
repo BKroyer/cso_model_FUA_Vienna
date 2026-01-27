@@ -18,14 +18,14 @@ cso_model <- function(
     qdwf = NA,                          # The DWF in mm/timestep for entire area and population
     W0 = 1.5,                           # W0 Maximum surface storage capacity of the catchment (water retained on impervious surfaces before runoff begins) [mm]. Default: 1.5 mm (Quaranta et al. 2022)
     k0 = 0.3,                           # k0 Reservoir constant for surface storage [1/timestep].Default: 0.3/(3 hours) (represents depletion of surface storage during dry periods).
-    dn = 9.1,                           # Dilution rate of the sewer network [-]. Defines the maximum network capacity relative to DWF. Default: 9.1.
-    dt = 9,                             # Dilution rate of the tank [-]. Defines the maximum tank outflow capacity relative to DWF. Default: 9.
-    W1 = 1,                             # Network storage capacity [mm]. Default: 1 mm (storage capacity of the sewer network before overflow).
-    W2 = 0.45                           # Tank storage capacity [mm]. Default: 0.45 mm (capacity of the retention tank before overflow).
+    dn = 4,                             # Dilution rate of the sewer network [-]. Defines the maximum network capacity relative to DWF. Default: 4.
+    dt = 7,                             # Dilution rate of the tank [-]. Defines the maximum tank outflow capacity relative to DWF. Default: 7.
+    W1 = 5,                             # Network storage capacity [mm]. Default: 5 mm (storage capacity of the sewer network before overflow).
+    W2 = 2,                             # Tank storage capacity [mm]. Default: 2 mm (capacity of the retention tank before overflow).
+    print_params = FALSE
     ){
 
     ## Check input data type
-    require(checkmate)
     if (!is.na(population)) assert_count(population)
     assert_number(area, na.ok = TRUE, lower = 0, finite = TRUE)
     if (!is.na(area) & !(area > 0)) stop(sprintf("area must be > 0, but is %s", area))
@@ -64,24 +64,27 @@ cso_model <- function(
     network_max_conveyance <- qdwf * dn # Maximum conveyance of the network (mm/timestep/m²) according to Pistocci and Dorati 2018
     k1W1 <- W1 * k1 # Maximum conveyance of the network k1*W1
 
-    print(paste0("network max conveyance according to Pistoccio: ", network_max_conveyance, " and k1W1: ", k1W1))
+    if (print_params){
+        print(paste0("network max conveyance according to Pistoccio: ", network_max_conveyance, " and k1W1: ", k1W1))
 
 
-    print(paste0("k0 is ", k0, " 1/timestep"))
-    print(paste0("k1 is ", round(k1, 4), " 1/timestep"))
-    print(paste0("k2 is ", round(k2, 4), " 1/timestep"))
+        print(paste0("k0 is ", k0, " 1/timestep"))
+        print(paste0("k1 is ", round(k1, 4), " 1/timestep"))
+        print(paste0("k2 is ", round(k2, 4), " 1/timestep"))
 
-    print(paste0("W0 is ", W0, " mm"))
-    print(paste0("W1 is ", W1, " mm"))
-    print(paste0("W2 is ", W2, " mm"))
+        print(paste0("W0 is ", W0, " mm"))
+        print(paste0("W1 is ", W1, " mm"))
+        print(paste0("W2 is ", W2, " mm"))
 
-    print(paste0("dt is ", dt, ""))
-    print(paste0("dn is ", dn, ""))
+        print(paste0("dt is ", dt, ""))
+        print(paste0("dn is ", dn, ""))
 
-    print(paste0("qdwf is ", qdwf))
-    print(paste0("time step is ", time_step," hours"))
-    print(paste0("the population density is ", round(pop_density, 2), " cap/km²_imp"))
-    print(paste0("CS share is ", round(share_served_by_CS, 4)))
+        print(paste0("qdwf is ", qdwf))
+        print(paste0("time step is ", time_step," hours"))
+        print(paste0("the population density is ", round(pop_density, 2), " cap/km²_imp"))
+        print(paste0("CS share is ", round(share_served_by_CS, 4)))
+    }
+
 
 
 
@@ -93,7 +96,10 @@ cso_model <- function(
         data <- data.table(time = time[1:max_item], precipitation = precipitation[1:max_item], key = "time")
     }
 
-    print(paste0("The mean annual precipitation is ", round(mean(data$precipitation, na.rm=T) * 8 * 365, 2)," mm/year"))
+    if (print_params){
+        print(paste0("The mean annual precipitation is ", round(mean(data$precipitation, na.rm=T) * 8 * 365, 2)," mm/year"))
+    }
+
 
     # save area (the impervious one!) to data for validation purposes later
     data[, area := area * share_served_by_CS]

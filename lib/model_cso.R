@@ -63,6 +63,9 @@ cso_model <- function(
 
     network_max_conveyance <- qdwf * dn # Maximum conveyance of the network (mm/timestep/m²) according to Pistocci and Dorati 2018
     k1W1 <- W1 * k1 # Maximum conveyance of the network k1*W1
+    k2W2 <- W2 * k2
+    e_k1 <- exp(-k1)
+    e_k2 <- exp(-k2)
 
     if (print_params){
         print(paste0("network max conveyance according to Pistoccio: ", network_max_conveyance, " and k1W1: ", k1W1))
@@ -89,7 +92,7 @@ cso_model <- function(
 
 
     # Create model dat object
-    require(data.table)
+    # require(data.table)
     if (is.na(max_item)){
         data <- data.table(time = time, precipitation = precipitation, key = "time")
     }else{
@@ -106,15 +109,17 @@ cso_model <- function(
 
 
     ### Surface Storage S(t) ### Equation 1
-    v <- numeric(length(precipitation))
-    v[1] <- pmin(precipitation[1], W0)
-    for (t in 2:length(v)) {
-        v[t] <- min(
-            W0,
-            if (precipitation[t] > 0) precipitation[t] + v[t - 1] else v[t - 1] * exp(-k0)
-        )
-    }
-    data[, surface_storage := v]
+    # v <- numeric(length(precipitation))
+    # v[1] <- pmin(precipitation[1], W0)
+    # for (t in 2:length(v)) {
+    #     v[t] <- min(
+    #         W0,
+    #         if (precipitation[t] > 0) precipitation[t] + v[t - 1] else v[t - 1] * exp(-k0)
+    #     )
+    # }
+    # data[, surface_storage := v]
+
+    data[, surface_storage := surface_storage_cpp(precipitation, W0, k0)]
 
     ### Runoff (Rainfall that reaches the network) R(t) ### Equation 2
     data[, runoff := pmax(0, precipitation - (W0 - data.table::shift(surface_storage)))]
@@ -122,195 +127,249 @@ cso_model <- function(
 
 
     ### Ft Network Flow ### Equation (4)
-    v <- numeric(nrow(data))
-    v[1] <- data$runoff[1] + qdwf  # initialize first element as runoff plus qdwf
-
-    for (t in 2:nrow(data)) {
-        v[t] <- (data$runoff[t] + qdwf) * (1 - exp(-k1)) +
-            v[t - 1] * exp(-k1)
-
-    # Barcelona / Santiago (but author confirmed eq 4 is the correct one)
+    # v <- numeric(nrow(data))
+    # v[1] <- data$runoff[1] + qdwf  # initialize first element as runoff plus qdwf
+    #
     # for (t in 2:nrow(data)) {
-    #     v[t] <- (data$runoff[t] + qdwf)
+    #     v[t] <- (data$runoff[t] + qdwf) * (1 - exp(-k1)) +
+    #         v[t - 1] * exp(-k1)
+    #
+    # # Barcelona / Santiago (but author confirmed eq 4 is the correct one)
+    # # for (t in 2:nrow(data)) {
+    # #     v[t] <- (data$runoff[t] + qdwf)
+    #
+    #
+    # }
+    # data[, network_flow := v]
 
+    data[, network_flow := network_flow_cpp(data$runoff, qdwf, k1)]
 
-    }
-    data[, network_flow := v]
 
 
     ### Worst case overflow E(t) ### Equation 3 (overflow volume if no buffering capacity of the sewer network)
-    data[ , worst_case_overflow := pmax(runoff + qdwf - k1W1, 0)]
-    # Formula for Vienna more complicated. Ask Nina. ?? does not look any different in the Excel file
+    # and adding A and B terms to check results
+    network_flow_lag <- data.table::shift(data$network_flow, 1L)
 
-
-    # adding A and B terms to check results
-    data[, A := runoff + qdwf - k1 * W1]
-    data[, B := runoff + qdwf - data.table::shift(network_flow, 1L)] # default is type 'lag', so 1L means one previous timestep
+    data[, `:=`(
+        A = runoff + qdwf - k1 * W1,
+        worst_case_overflow = pmax(runoff + qdwf - k1W1, 0),
+        B = runoff + qdwf - data.table::shift(network_flow)
+    )]
 
 
     ### Scenario in one step ### Implementation checked by Steffen, just changed from function to direct data.table assignment
     data[, scenario :=
              fcase(  ( B >= 0 ) & ( A >= B ) | ( B <= 0 ) & ( A >= 0 ), "a", # B<=0 here in appendix, means network overflow 0, but important distinction for tank overflow
-                     ( B >= 0 ) & ( A <= B )  &  ( A >= B * exp(-k1)), "b", # due to mail: A>=Bexp, equal returns exactly 0, but scenario matters for the tank overflow calculation
-                     ( B <= 0 ) & ( A >= B ) & ( A <= B * exp(-k1)), "c", # B <= 0 in appendix, again exactly 0 should still not be d for tank overflow calculations
+                     ( B >= 0 ) & ( A <= B )  &  ( A >= B * e_k1), "b", # due to mail: A>=Bexp, equal returns exactly 0, but scenario matters for the tank overflow calculation
+                     ( B <= 0 ) & ( A >= B ) & ( A <= B * e_k1), "c", # B <= 0 in appendix, again exactly 0 should still not be d for tank overflow calculations
                      default = "d"
     )]
 
 
     ### tau1 ###
     # used in tank overflow calculations
-    data[, tau1 := fcase(
+    data[, tau1 := fifelse(
         scenario %in% c("a", "d"), 0,
-        scenario %in% c("b", "c"), log(B/A) / k1
+        log(B / A) / k1
     )]
 
 
-    ### Network overflow E'(t) ### Equation 5
-    fun_network_overflow <- function(A,
-                                     B,
-                                     scenario,
-                                     k1) {
+    # ### Network overflow E'(t) ### Equation 5
+    # fun_network_overflow <- function(A,
+    #                                  B,
+    #                                  scenario,
+    #                                  k1) {
+    #
+    #     ratio <- B / A
+    #     # safe_ratio <- ifelse(ratio > 0, ratio, NA_real_) # to avoid warnings for log(B/A) when negative
+    #
+    #     ratio_A_B <- A / B
+    #     safe_ratio_A_B <- ifelse(ratio_A_B > 0, ratio_A_B, NA_real_)
+    #
+    #
+    #     Eprime_b <- if (!ln_A_B) {
+    #         A * (1 - (1 + log(ratio)) / k1) + B / k1 * e_k1
+    #     } else {
+    #         A * (1 - (1 + log(safe_ratio_A_B)) / k1) + B / k1 * e_k1
+    #     }
+    #
+    #
+    #     Eprime <- fcase(
+    #
+    #         # scenario a:
+    #         scenario == "a",
+    #         A - B / k1 * (1 - e_k1),
+    #
+    #         # scenario b:
+    #         ## ln(A/B) in the Excel files, I think B/A is correct (and seems like it, see email), but set to A/B to compare to Excel
+    #         scenario == "b",
+    #         Eprime_b,
+    #
+    #         # scenario c:
+    #         scenario == "c",
+    #         A / k1 * (1 + log(ratio)) -
+    #             B / k1,
+    #
+    #         # scenario d (no overflow)
+    #         default = 0
+    #     )
+    #
+    #     return(Eprime)
+    # }
+    #
+    # data[, network_overflow := pmax(0, fun_network_overflow(A, B, scenario, k1))]
 
-        ratio <- B / A
-        # safe_ratio <- ifelse(ratio > 0, ratio, NA_real_) # to avoid warnings for log(B/A) when negative
-
-        ratio_A_B <- A / B
-        safe_ratio_A_B <- ifelse(ratio_A_B > 0, ratio_A_B, NA_real_)
-
-
-        Eprime_b <- if (!ln_A_B) {
-            A * (1 - (1 + log(ratio)) / k1) + B / k1 * exp(-k1)
-        } else {
-            A * (1 - (1 + log(safe_ratio_A_B)) / k1) + B / k1 * exp(-k1)
-        }
-
-
-        Eprime <- fcase(
-
-            # scenario a:
-            scenario == "a",
-            A - B / k1 * (1 - exp(-k1)),
-
-            # scenario b:
-            ## ln(A/B) in the Excel files, I think B/A is correct (and seems like it, see email), but set to A/B to compare to Excel
-            scenario == "b",
-            Eprime_b,
-
-            # scenario c:
-            scenario == "c",
-            A / k1 * (1 + log(ratio)) -
-                B / k1,
-
-            # scenario d (no overflow)
-            default = 0
-        )
-
-        return(Eprime)
-    }
-
-    data[, network_overflow := pmax(0, fun_network_overflow(A, B, scenario, k1))]
+    data[, network_overflow := network_overflow_rcpp(
+        A = A,
+        B = B,
+        scenario = scenario,
+        k1 = k1,
+        ln_A_B = FALSE,   # or TRUE if needed
+        e_k1 = e_k1
+    )]
 
 
 
 
 
 
+    # ### virtual volume and tank volume ###
+    # converting scenarios to integers for C++, apparently faster than characters
+    data[, scenario_id :=
+             fcase(
+                 scenario == "a", 1L,
+                 scenario == "b", 2L,
+                 scenario == "c", 3L,
+                 default = 4L # this is "d"
+             )
+    ]
 
-    ### virtual volume and tank volume ###
-    fun_virtual_volume_and_tank_volume <- function(
-        runoff,
-        network_flow,
-        tau1,
-        k2,                   # k2
-        qdwf,
-        k1,                   # k1
-        W1,                   # W1
-        k1W1,                 # k1W1
-        W2,                   # max volume the tank can be filled with
-        scenario
-    ) {
+    virtual_volume_cols <- virtual_volume_and_tank_volume_cpp(
+        runoff        = data$runoff,
+        network_flow  = data$network_flow,
+        tau1          = data$tau1,
+        k2            = k2,
+        qdwf          = qdwf,
+        k1            = k1,
+        W1            = W1,
+        k1W1          = k1W1,
+        W2            = W2,
+        scenario      = data$scenario_id
+    )
 
-        n <- length(runoff)
+    data[, names(virtual_volume_cols) := virtual_volume_cols] # virtual volumes and tank volume
 
-        va      <- numeric(n)
-        vd      <- numeric(n)
-        vb_t1   <- numeric(n)
-        vc_t1   <- numeric(n)
-        vb      <- numeric(n)
-        vc      <- numeric(n)
-        tv      <- numeric(n)
-
-        tv[1] <- network_flow[1] / k2 # initial tank volume
-
-        for (t in 2:n) {
-
-            # --- scenario a
-            va[t] <- k1W1 / k2 * (1 - exp(-k2)) + tv[t - 1] * exp(-k2)
-
-            # --- scenario d
-            vd[t] <- ((runoff[t] + qdwf) / k2) * (1 - exp(-k2)) -
-                ((runoff[t] + qdwf) - network_flow[t - 1]) / (k2-k1) * (exp(-k1) - exp(-k2)) +
-                tv[t - 1] * exp(-k2) # using the "real" tank volume as tv[t-1], in line with Excel
-
-            # --- scenario b: tau = tau1
-            vb_t1[t] <- ((runoff[t] + qdwf) / k2) * (1 - exp(-k2 * tau1[t])) -
-                (((runoff[t] + qdwf) - network_flow[t - 1]) / (k2-k1)) * (exp(-k1 * tau1[t]) - exp(-k2 * tau1[t])) +
-                tv[t - 1] * exp(-k2 * tau1[t])
-
-            # --- scenario c: tau = tau1
-            #vc_t1[t] <- k1W1 / k2 * (1 - exp(-k2 * tau1[t])) + tv[t - 1] * exp(-k2 * tau1[t]) # here they used 1 instead of tau1 in Excel, Nina also did, as if tau1 is 1 always
-            #I think using tau1 is correct, but leave as 1 for now to compare to the Excel
-            vc_t1[t] <- k1W1 / k2 * (1 - exp(-k2 * 1)) + tv[t - 1] * exp(-k2 * 1)
-            # vc_t1[t] <- k1W1 / k2 * (1 - exp(-k2 * tau1)) + tv[t - 1] * exp(-k2 * tau1)
-
-            # --- scenario b: part tau > tau1
-            vb[t] <- vb_t1[t] * exp(-k2 * (1- tau1[t])) +
-                k1W1 / k2 * (1 - exp(-k2 * (1- tau1[t])))
-
-            # --- scenario c: part tau > tau1
-            vc[t] <- ((runoff[t] + qdwf) / k2) * (1 - exp(-k2 * (1- tau1[t]))) +
-                ((runoff[t] + qdwf) - network_flow[t - 1]) / (k2-k1) * (exp(-k2 * (1- tau1[t])) - exp(-k1 * (1 - tau1[t]))) +
-                vc_t1[t] * exp(-k2 * (1- tau1[t]))
-
-            # --- tank volume W (capped by tank capacity W2); always the state at end of time step
-            tv[t] <- min(
-                fifelse(scenario[t] == "a", va[t],
-                        fifelse(scenario[t] == "b", vb[t],
-                                fifelse(scenario[t] == "c", vc[t], vd[t]))),
-                W2
-            )
-        }
-
-        return(list(va, vd, vb_t1, vc_t1, vb, vc, tv))
-    }
-
-    data[, c("virtual_volume_a",
-             "virtual_volume_d",
-             "virtual_volume_b_t1",
-             "virtual_volume_c_t1",
-             "virtual_volume_b",
-             "virtual_volume_c",
-             "tank_volume_W") := fun_virtual_volume_and_tank_volume(runoff, network_flow, tau1, k2, qdwf, k1,
-                                                                  W1, k1W1, W2, scenario)]
+    # fun_virtual_volume_and_tank_volume <- function(
+    #     runoff,
+    #     network_flow,
+    #     tau1,
+    #     k2,                   # k2
+    #     qdwf,
+    #     k1,                   # k1
+    #     W1,                   # W1
+    #     k1W1,                 # k1W1
+    #     W2,                   # max volume the tank can be filled with
+    #     scenario
+    # ) {
+    #
+    #     n <- length(runoff)
+    #
+    #     va      <- numeric(n)
+    #     vd      <- numeric(n)
+    #     vb_t1   <- numeric(n)
+    #     vc_t1   <- numeric(n)
+    #     vb      <- numeric(n)
+    #     vc      <- numeric(n)
+    #     tv      <- numeric(n)
+    #
+    #     tv[1] <- network_flow[1] / k2 # initial tank volume
+    #
+    #     for (t in 2:n) {
+    #
+    #         # --- scenario a
+    #         va[t] <- k1W1 / k2 * (1 - e_k2) + tv[t - 1] * e_k2
+    #
+    #         # --- scenario d
+    #         vd[t] <- ((runoff[t] + qdwf) / k2) * (1 - e_k2) -
+    #             ((runoff[t] + qdwf) - network_flow[t - 1]) / (k2-k1) * (e_k1 - e_k2) +
+    #             tv[t - 1] * e_k2 # using the "real" tank volume as tv[t-1], in line with Excel
+    #
+    #         # --- scenario b: tau = tau1
+    #         vb_t1[t] <- ((runoff[t] + qdwf) / k2) * (1 - exp(-k2 * tau1[t])) -
+    #             (((runoff[t] + qdwf) - network_flow[t - 1]) / (k2-k1)) * (exp(-k1 * tau1[t]) - exp(-k2 * tau1[t])) +
+    #             tv[t - 1] * exp(-k2 * tau1[t])
+    #
+    #         # --- scenario c: tau = tau1
+    #         #vc_t1[t] <- k1W1 / k2 * (1 - exp(-k2 * tau1[t])) + tv[t - 1] * exp(-k2 * tau1[t]) # here they used 1 instead of tau1 in Excel, Nina also did, as if tau1 is 1 always
+    #         #I think using tau1 is correct, but leave as 1 for now to compare to the Excel
+    #         vc_t1[t] <- k1W1 / k2 * (1 - exp(-k2 * 1)) + tv[t - 1] * exp(-k2 * 1)
+    #         # vc_t1[t] <- k1W1 / k2 * (1 - exp(-k2 * tau1)) + tv[t - 1] * exp(-k2 * tau1)
+    #
+    #         # --- scenario b: part tau > tau1
+    #         vb[t] <- vb_t1[t] * exp(-k2 * (1- tau1[t])) +
+    #             k1W1 / k2 * (1 - exp(-k2 * (1- tau1[t])))
+    #
+    #         # --- scenario c: part tau > tau1
+    #         vc[t] <- ((runoff[t] + qdwf) / k2) * (1 - exp(-k2 * (1- tau1[t]))) +
+    #             ((runoff[t] + qdwf) - network_flow[t - 1]) / (k2-k1) * (exp(-k2 * (1- tau1[t])) - exp(-k1 * (1 - tau1[t]))) +
+    #             vc_t1[t] * exp(-k2 * (1- tau1[t]))
+    #
+    #         # --- tank volume W (capped by tank capacity W2); always the state at end of time step
+    #         tv[t] <- min(
+    #             fifelse(scenario[t] == "a", va[t],
+    #                     fifelse(scenario[t] == "b", vb[t],
+    #                             fifelse(scenario[t] == "c", vc[t], vd[t]))),
+    #             W2
+    #         )
+    #     }
+    #
+    #     return(list(va, vd, vb_t1, vc_t1, vb, vc, tv))
+    # }
+    #
+    # data[, c("virtual_volume_a",
+    #          "virtual_volume_d",
+    #          "virtual_volume_b_t1",
+    #          "virtual_volume_c_t1",
+    #          "virtual_volume_b",
+    #          "virtual_volume_c",
+    #          "tank_volume_W") := fun_virtual_volume_and_tank_volume(runoff, network_flow, tau1, k2, qdwf, k1,
+    #                                                               W1, k1W1, W2, scenario)]
 
 
     ### tau2 ### equation 11 in appendix B
-    data[, part1 := k1 * W1 - k2 * data.table::shift(tank_volume_W)]
-    data[, part2 := k1 * W1 - k2 * W2]
-    data[, tau2 :=  fifelse((part2 != 0 & (part1/part2) > 0), pmax(0, pmin(1, log(part1/part2) / k2)), 0)]
-    # The if conditions should never happen, it makes no sense to build a tank with greater conveyance than the network
-    # as that would mean no storage --> what it is set to (here 0) does not matter
+    tank_volume_W_lag <- data.table::shift(data$tank_volume_W)
+    # data[, part1 := k1 * W1 - k2 * tank_volume_W_lag]
+    # data[, part2 := k1 * W1 - k2 * W2]
+    # data[, tau2 :=  fifelse((part2 != 0 & (part1/part2) > 0), pmax(0, pmin(1, log(part1/part2) / k2)), 0)]
+    # # The if conditions should never happen, it makes no sense to build a tank with greater conveyance than the network
+    # # as that would mean no storage --> what it is set to (here 0) does not matter
+    #
+    # if (any(data$part2 <= 0 | data$part1 < 0, na.rm = TRUE)) {
+    #     stop("Tank conveyance numerically greater than or equal to network conveyance, does not make sense in construction.")
+    # }
+    #
+    #
+    # data[, c("part1", "part2") := NULL] # not needed further
+    #
+    #
+    # ### Ea(t) ### Equation 12 in appendix B
+    # data[, Ea := (1 - tau2) * (k1W1 - (k2 * W2))]
 
-    if (any(data$part2 <= 0 | data$part1 < 0, na.rm = TRUE)) {
-        stop("Tank conveyance numerically greater than or equal to network conveyance, does not make sense in construction.")
-    }
+    data[, `:=`(
+        tau2 = fifelse(
+            (k2W2 != 0 & (k1W1 - k2 * tank_volume_W_lag)/k2W2 > 0),
+            pmax(0, pmin(1, log((k1W1 - k2 * tank_volume_W_lag)/k2W2) / k2)),
+            0
+        ),
+        Ea = (1 - fifelse(
+            (k2W2 != 0 & (k1W1 - k2 * tank_volume_W_lag)/k2W2 > 0),
+            pmax(0, pmin(1, log((k1W1 - k2 * tank_volume_W_lag)/k2W2) / k2)),
+            0
+        )) * (k1W1 - k2W2)
+    )]
 
 
-    data[, c("part1", "part2") := NULL] # not needed further
 
-
-    ### Ea(t) ### Equation 12 in appendix B
-    data[, Ea := (1 - tau2) * (k1W1 - (k2 * W2))]
 
     ### t2_1 ###
     fun_t2_1 <- function(tank_volume,
@@ -341,26 +400,26 @@ cso_model <- function(
         data.table::shift(data$tank_volume) < W2,
         # case: tank not full at previous timestep
         (runoff + qdwf - k2 * W2) * (1 - t2_1) +
-            (runoff + qdwf - data.table::shift(data$network_flow)) / k1 *
-            (exp(-k1) - exp(-k1 * t2_1)),
+            (runoff + qdwf - network_flow_lag) / k1 *
+            (e_k1 - exp(-k1 * t2_1)),
 
         # case: tank full at previous timestep
         (runoff + qdwf - k2 * W2) * t2_1 +
-            (t2_1 + qdwf - data.table::shift(data$network_flow)) / k1 *
+            (t2_1 + qdwf - network_flow_lag) / k1 *
             (exp(-k1 * t2_1) - 1)
     )]
 
 
 
     ### t2_2 ###
-    data[ ,t2_2 := pmin(1, (data.table::shift(tank_volume_W) - W2) / (data.table::shift(tank_volume_W) - virtual_volume_b)) * tau1]
+    data[ ,t2_2 := pmin(1, (tank_volume_W_lag - W2) / (tank_volume_W_lag - virtual_volume_b)) * tau1]
 
 
     ### Eb ###
     data[, Eb :=
              fifelse(
                  ((W1 * k1 - k2 * W2) != 0 & ((W1 * k1 - virtual_volume_b_t1 * k2)/(W1 * k1 - k2 * W2)) > 0),
-                 (runoff + qdwf - k2 * W2) * (tau1 - t2_2) + (runoff + qdwf - data.table::shift(network_flow)) / k1 *
+                 (runoff + qdwf - k2 * W2) * (tau1 - t2_2) + (runoff + qdwf - network_flow_lag) / k1 *
                      (exp(-k1 * tau1) - exp(-k1 * t2_2)) +
                      (W1 * k1 - k2 * W2) *
                      (1 - pmin(1, tau1 + pmax(0, log((W1 * k1 - virtual_volume_b_t1 * k2) / # tau1 capped at 1 here
@@ -411,30 +470,55 @@ cso_model <- function(
     ### CSO and Rain volumes per rain event
     # already gives total at event end, was cumulative and then total before; this is per RAIN event as in Barcelona
     # marking end of rain event to simplify the cso volume per event calculation (where rain_event==2 or 1 transitions to 0)
-    data[, rain_end := fifelse(rain_event != 0 & data.table::shift(rain_event, type = "lead", fill = 0) == 0, 1L, 0L)]
+    # data[, rain_end := fifelse(rain_event != 0 & data.table::shift(rain_event, type = "lead", fill = 0) == 0, 1L, 0L)]
+    #
+    # data[, cso_volume_per_event := 0]  # initialize
+    # data[, rain_volume_per_event := 0]
+    # # for each event, sum total_overflow over the event and write it at the end
+    # event_starts <- which(data$rain_event == 1)
+    # for (start in event_starts) {
+    #
+    #     # find next rain_end
+    #     rel_end <- which(data$rain_end[start:nrow(data)] == 1)
+    #
+    #     if (length(rel_end) > 0) {
+    #         # normal case: event ends
+    #         end <- start + rel_end[1] - 1
+    #     } else {
+    #         # no end → store result at last row of the dataset
+    #         end <- nrow(data)
+    #     }
+    #
+    #     # write totals at the event end
+    #     data$cso_volume_per_event[end]  <- sum(data$total_overflow[start:end], na.rm = TRUE)
+    #     data$rain_volume_per_event[end] <- sum(data$precipitation[start:end], na.rm = TRUE)
+    # }
+    #
+    # print(summary(data$rain_volume_per_event))
 
-    data[, cso_volume_per_event := 0]  # initialize
+
+    # mark rain event ends
+    data[, rain_end := fifelse(rain_event != 0 & shift(rain_event, type = "lead", fill = 0) == 0, 1L, 0L)]
+
+    # assign a unique event ID per rain event
+    data[, event_id := rleid(rain_event)][rain_event == 0, event_id := NA_integer_]
+
+    # compute cso and rain volume per event at event end
+    event_sums <- data[!is.na(event_id), .(
+        cso_volume_per_event = sum(total_overflow, na.rm = TRUE),
+        rain_volume_per_event = sum(precipitation, na.rm = TRUE),
+        row_end = .I[.N]  # last row of the event
+    ), by = event_id]
+
+    # initialize columns
+    data[, cso_volume_per_event := 0]
     data[, rain_volume_per_event := 0]
-    # for each event, sum total_overflow over the event and write it at the end
-    event_starts <- which(data$rain_event == 1)
-    for (start in event_starts) {
 
-        # find next rain_end
-        rel_end <- which(data$rain_end[start:nrow(data)] == 1)
-
-        if (length(rel_end) > 0) {
-            # normal case: event ends
-            end <- start + rel_end[1] - 1
-        } else {
-            # no end → store result at last row of the dataset
-            end <- nrow(data)
-        }
-
-        # write totals at the event end
-        data$cso_volume_per_event[end]  <- sum(data$total_overflow[start:end], na.rm = TRUE)
-        data$rain_volume_per_event[end] <- sum(data$precipitation[start:end], na.rm = TRUE)
-    }
-
+    # assign sums at the end row of each event
+    data[event_sums$row_end, c("cso_volume_per_event", "rain_volume_per_event") :=
+             .(event_sums$cso_volume_per_event, event_sums$rain_volume_per_event)]
+    #
+    # print(summary(data$rain_volume_per_event))
 
 
 

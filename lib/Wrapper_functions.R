@@ -12,9 +12,11 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
                                         save_single_files = FALSE,
                                         print_params = FALSE) {
 
+    sourceCpp("lib/cso_model_helpers.cpp")
+
+
     # extract single rows
     p     <- params[gridcode == gridcode_temp]
-    # print(p)
     pop   <- pop_dt[settlement_id  == gridcode_temp]
     imp   <- imp_dt[settlement_id  == gridcode_temp]
     share <- share_dt[gridcode == gridcode_temp]
@@ -22,8 +24,6 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
     # precipitation time series
     prec  <- prec_dt[gridcode == gridcode_temp]
 
-    cat("-------------------------------------------\n")
-    cat("Starting gridcode:", gridcode_temp, "\n")
     t1 <- Sys.time()
 
     used_vals <- cbind(
@@ -36,11 +36,16 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
     if (imp$imp_area_km2 == 0){ # skipping settlements with 0 km² impervious surface
         single_params <- cbind(data.table(gridcode = gridcode_temp), used_vals)
         single_row <- data.table(gridcode = gridcode_temp)
-            return(list(
-                single_params,
-                single_row
-            ))
+        runtime <- 0
+        return(list(
+            gridcode = gridcode_temp,
+            runtime_secs = runtime,
+            single_params = single_params,
+            single_row = single_row
+        ))
     }
+
+    Rprof("cso_profile.out", line.profiling = TRUE)
 
     # run model
     res <- cso_model(
@@ -59,9 +64,11 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
         print_params = print_params
     )
 
+    Rprof(NULL)
+    summaryRprof("cso_profile.out", lines = "show")
+
     t2 <- Sys.time()
-    cat("Finished gridcode:", gridcode_temp, "in", round(difftime(t2, t1, units="secs"),1), "seconds\n")
-    cat("-------------------------------------------\n")
+    runtime <- as.numeric(difftime(t2, t1, units = "secs"))
 
     # ensure data.table + attach gridcode
     #res_dt <- as.data.table(res) # too large for that idea of rbinding everything
@@ -82,7 +89,11 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
 
     if (save_single_files){
         wb_path <- process_and_plot_results(res, path_out, location = location, used_params = used_vals, save_single_files = save_single_files, gridcode_temp = gridcode_temp)#, validation_data = data_vienna, validation_area = 70)
-        return(wb_path)
+        return(list(
+            gridcode = gridcode_temp,
+            runtime_secs = runtime,
+            workbook_path = wb_path
+        ))
 
     }else{
         single_row_results <-  process_and_plot_results(res, path_out, location = location, used_params = used_vals, save_single_files = save_single_files, gridcode_temp = gridcode_temp)
@@ -94,9 +105,11 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
         # pop_temp <- data.table(population = single_params$population)
         single_row <- cbind(gridcode_dt, single_row)
         return(list(
-            single_params,
-            single_row
-            ))
+            gridcode = gridcode_temp,
+            runtime_secs = runtime,
+            single_params = single_params,
+            single_row = single_row
+        ))
     }
 
 

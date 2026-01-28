@@ -8,6 +8,7 @@ rm(list=ls())
 library(ProjectTemplate)
 load.project()
 
+
 ##################################################################
 # CSO Data Import and Processing                                 #
 # Purpose:                                                       #
@@ -88,16 +89,19 @@ mod_results <- future_map(
     .options = furrr_options(seed = 123)
 )
 
+runtime_dt <- rbindlist(lapply(mod_results, function(x) data.table(gridcode = x$gridcode, runtime_secs = x$runtime_secs)))
+
+
 if (save_single_files){
-    walk(mod_results, function(wb_path) {
-        wb_temp <- wb_path$wb
-        path_temp <- wb_path$path_out
-        # Extract gridcode from first sheet
-        sheet_name <- names(wb_temp)[1]
+    walk(mod_results, function(res) {
+        wb_path <- res$workbook_path$wb        # the workbook object
+        path_temp <- res$workbook_path$path_out  # the path
+
+        sheet_name <- names(wb_path)[1]
         gc <- sub("CSnew_params_", "", sheet_name)
 
         saveWorkbook(
-            wb_temp,
+            wb_path,
             file.path(path_temp, paste0("cso_summaries_", gc, ".xlsx")),
             overwrite = TRUE
         )
@@ -105,35 +109,34 @@ if (save_single_files){
 }else{
 
     dt_params <- rbindlist(
-        lapply(mod_results, `[[`, 1),
+        lapply(mod_results, function(x) x$single_params),
         use.names = TRUE,
         fill = TRUE
     )
 
     dt_results <- rbindlist(
-        lapply(mod_results, `[[`, 2),
+        lapply(mod_results, function(x) x$single_row),
         use.names = TRUE,
         fill = TRUE
     )
 
-
-    summarized_stats <- as.data.table(t(colSums(dt_results, na.rm=T)), keep.rownames = TRUE) # ignore the gridcode sum
-
+    summarized_stats <- as.data.table(t(colSums(dt_results, na.rm = TRUE)), keep.rownames = TRUE)
 
     summary_overflow <- data.table(
-        metric = c("total population", "total impervious area served by CS [m²]","network [mm]", "tank [mm]", "total [mm]", "total [Mm3y]"),
-        model  = round(c(summarized_stats$population,
-                         summarized_stats$imp_area_served_by_CS_km2,
-                         summarized_stats$annual_mean_network_mm,
-                         summarized_stats$annual_mean_tank_mm,
-                         summarized_stats$total_overflow_mm,
-                         summarized_stats$total_overflow_Mm3y), round_to),
+        metric = c("total population", "total impervious area served by CS [m²]",
+                   "network [mm]", "tank [mm]", "total [mm]", "total [Mm3y]"),
+        model = round(c(summarized_stats$population,
+                        summarized_stats$imp_area_served_by_CS_km2,
+                        summarized_stats$annual_mean_network_mm,
+                        summarized_stats$annual_mean_tank_mm,
+                        summarized_stats$total_overflow_mm,
+                        summarized_stats$total_overflow_Mm3y), round_to),
         validation = c(NA, round(c(summarized_stats$validation_area,
-                    summarized_stats$annual_mean_network_orig,
-                    summarized_stats$annual_mean_tank_orig,
-                    summarized_stats$total_overflow_orig,
-                    summarized_stats$total_overflow_Mm3y_orig), round_to))
-        )
+                                   summarized_stats$annual_mean_network_orig,
+                                   summarized_stats$annual_mean_tank_orig,
+                                   summarized_stats$total_overflow_orig,
+                                   summarized_stats$total_overflow_Mm3y_orig), round_to))
+    )
 
     # change the sum here, does not make sense for the duration if multiple gridcodes, might have same hour overflow
     event_metrics <- data.table(
@@ -182,4 +185,5 @@ if (save_single_files){
 
 }
 
-
+print(summarized_stats$total_overflow_Mm3y)
+print(runtime_dt)

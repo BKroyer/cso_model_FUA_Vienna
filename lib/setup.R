@@ -27,22 +27,29 @@ date_end <- "2016-12-31" # 2020-12-31
 #date_begin <- "2001-01-01"
 #date_end <- "2016-12-31"
 
+# get years between begin and end date
+yr_begin <- year(date_begin)
+yr_end <- year(date_end)
+current_years <- as.character(seq(yr_begin, yr_end))
+nam <- paste(current_years, collapse = "_")
+
 # Area of interest ---------------------------------------------------------------------------------------------------------------
 
-area_of_interest <- file.path(path_intermediate_res, "FUA_vienna", "FUA_vienna.shp") # "Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp" # "Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp"
-area_of_interest_name <- "FUA_Vienna_paper_dafault_2010_2016" #Austria_default_params
+area_of_interest <- file.path(path_intermediate_res, "Einzugsgebiet_Eisenstadt", "Einzugsgebiet_Eisenstadt.shp") # file.path(path_intermediate_res, "FUA_vienna", "FUA_vienna.shp") # "Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp" # "Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp"
+
+area_of_interest_name <- "Eisenstadt_Austrian_params" #Austria_default_params
 settlements <- "Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp" # else FUA
 
 # Gridcode specification (NULL to process all within AoI, else vector of gridcodes to process) -----------------------------------
 
-gridcode_to_process <- c(253253) #c(253253, 261635) # 253253 is wien, the others are random to test multiple processing #, 259334, 266367, 265844
+gridcode_to_process <- NULL #c(253253) #c(253253, 261635) # 253253 is wien, the others are random to test multiple processing #, 259334, 266367, 265844
 
 # model params for the gridcodes, either one for all or one per gridcode (vector of length of gridcodes)
 
 k0 <- 0.3
 W0 <- 1.5
-dn <- 7 #29
-dt <- 4#2
+dn <- 29 #7 #29
+dt <- 2 #4#2
 W1 <- 5
 W2 <- 1.5
 dwf_per_capita <- 0.2
@@ -57,7 +64,7 @@ if (already_processed){
     urb_4326 <- vect("data/intermediate_results/settlements_cropped_epsg4326.gpkg")
     urb_3035 <- vect("data/intermediate_results/settlements_cropped_epsg3035.gpkg")
     aoi_buffered_epsg4326 <- vect("data/intermediate_results/aoi_buffered_epsg4326.gpkg")
-    aoi_epsg3035 <- vect("data/intermediate_results/aoi_epsg3035.gpkg")
+    aoi_epsg3035 <- vect("data/intermediate_results/aoi_epsg3035.gpkg") # 186058 km²
 
 
 }else{

@@ -45,7 +45,7 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
         ))
     }
 
-    Rprof("cso_profile.out", line.profiling = TRUE)
+    # Rprof("cso_profile.out", line.profiling = TRUE)
 
     # run model
     res <- cso_model(
@@ -64,8 +64,8 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
         print_params = print_params
     )
 
-    Rprof(NULL)
-    summaryRprof("cso_profile.out", lines = "show")
+    # Rprof(NULL)
+    # summaryRprof("cso_profile.out", lines = "show")
 
     t2 <- Sys.time()
     runtime <- as.numeric(difftime(t2, t1, units = "secs"))

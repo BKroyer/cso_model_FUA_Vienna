@@ -15,7 +15,7 @@ cso_model <- function(
     precipitation,                      # numeric. vector containing precipitation per timestep [mm].
     max_item = NA,                      # option to subset data, integer of maximum item index to be used, e.g. 100 for first 100 time steps
     dwf_per_capita = 0.2,               # Dry Weather Flow (DWF) per capita [m³/day/person]. Default: 0.2 m³/day/person (Quaranta et al. 2022).
-    qdwf = NA,                          # The DWF in mm/timestep for entire area and population
+    qdwf = NA,                          # The DWF in mm/m²/timestep for entire population
     W0 = 1.5,                           # W0 Maximum surface storage capacity of the catchment (water retained on impervious surfaces before runoff begins) [mm]. Default: 1.5 mm (Quaranta et al. 2022)
     k0 = 0.3,                           # k0 Reservoir constant for surface storage [1/timestep].Default: 0.3/(3 hours) (represents depletion of surface storage during dry periods).
     dn = 4,                             # Dilution rate of the sewer network [-]. Defines the maximum network capacity relative to DWF. Default: 4.
@@ -53,7 +53,7 @@ cso_model <- function(
         pop_density <- population / (area * share_served_by_CS)} # Personen/km²_imp (as km² imp served by CS) # in Excel often ha used as unit, factor 1/100
     if (is.na(qdwf)){
         if (is.na(pop_density) | is.na(dwf_per_capita)){
-            errorCondition("Either qdwf or all of pop_density and dwf_per_capita must be given (or possible to calculate).")
+            errorCondition("Either qdwf or all of pop_density and dwf_per_capita must be given (or impossible to calculate).")
         }
         qdwf <- pop_density * dwf_per_capita / timesteps_per_day / 1000 # mm/timestep; factor 1000 as area supposedly given in km², not ha
     }
@@ -148,7 +148,7 @@ cso_model <- function(
 
     ### Worst case overflow E(t) ### Equation 3 (overflow volume if no buffering capacity of the sewer network)
     # and adding A and B terms to check results
-    network_flow_lag <- data.table::shift(data$network_flow, 1L)
+    network_flow_lag <- data.table::shift(data$network_flow)
 
     data[, `:=`(
         A = runoff + qdwf - k1 * W1,
@@ -372,26 +372,28 @@ cso_model <- function(
 
 
     ### t2_1 ###
-    fun_t2_1 <- function(tank_volume,
-                         virtual_volume_d,
-                         k1W1,
-                         k2,
-                         W2) {
-        v <- numeric(length(tank_volume))
-        v[1] <- NA_real_
-        for (t in 2:length(v)) {
-            v[t] <- max(0, min(1,
-                               fcase(tank_volume[t - 1] == W2 & virtual_volume_d[t] >= W2, 0, # tank full from beginning and stays full -> overflow from time 0
-                                     tank_volume[t - 1] == W2,                                       (tank_volume[t - 1] - W2) / (tank_volume[t - 1] - virtual_volume_d[t]), # the ratio
-                                     tank_volume[t - 1] == virtual_volume_d[t],                                1, # if tau can't be determined (and Wt-1 < W2), tau2 is 1 (case where it is 0 covered by first expression)
-                                     virtual_volume_d[t] >= W2,                                      (tank_volume[t - 1] - W2) / (tank_volume[t - 1] - virtual_volume_d[t]), # the ratio
-                                     default = 1)
-                         ))
-        }
-        return(v)
-    }
+    # fun_t2_1 <- function(tank_volume,
+    #                      virtual_volume_d,
+    #                      k1W1,
+    #                      k2,
+    #                      W2) {
+    #     v <- numeric(length(tank_volume))
+    #     v[1] <- NA_real_
+    #     for (t in 2:length(v)) {
+    #         v[t] <- max(0, min(1,
+    #                            fcase(tank_volume[t - 1] == W2 & virtual_volume_d[t] >= W2, 0, # tank full from beginning and stays full -> overflow from time 0
+    #                                  tank_volume[t - 1] == W2,                                       (tank_volume[t - 1] - W2) / (tank_volume[t - 1] - virtual_volume_d[t]), # the ratio from appendix
+    #                                  tank_volume[t - 1] == virtual_volume_d[t],                                1, # if tau can't be determined (and Wt-1 < W2), tau2 is 1 (case where it is 0 covered by first expression)
+    #                                  virtual_volume_d[t] >= W2,                                      (tank_volume[t - 1] - W2) / (tank_volume[t - 1] - virtual_volume_d[t]), # the ratio
+    #                                  default = 1)
+    #                      ))
+    #     }
+    #     return(v)
+    # }
+    #
+    # data[, t2_1 := fun_t2_1(tank_volume_W, virtual_volume_d, k1W1, k2, W2)]
 
-    data[, t2_1 := fun_t2_1(tank_volume_W, virtual_volume_d, k1W1, k2, W2)]
+    data[, t2_1 := t2_1_cpp(tank_volume_W, virtual_volume_d, W2)]
 
 
     ### Ed(t) ### Equation 20 (?) in appendix B
@@ -498,7 +500,7 @@ cso_model <- function(
 
 
     # mark rain event ends
-    data[, rain_end := fifelse(rain_event != 0 & shift(rain_event, type = "lead", fill = 0) == 0, 1L, 0L)]
+    data[, rain_end := fifelse(rain_event != 0 & data.table::shift(rain_event, type = "lead", fill = 0) == 0, 1L, 0L)]
 
     # assign a unique event ID per rain event
     data[, event_id := rleid(rain_event)][rain_event == 0, event_id := NA_integer_]

@@ -32,14 +32,14 @@ pop_dt[, population := as.integer(population)]
 
 
 # Import impervious area data
-imp_dt <- readRDS(file.path(path_intermediate_res, "impervious_area.rds"))
+imp_dt <- readRDS(file.path(path_intermediate_res, "impervious_area_2015.rds"))
 setDT(imp_dt, key = "settlement_id")
 imp_dt <- imp_dt[.(gridcode_to_process)]
 setkey(imp_dt, settlement_id)
 
 
 # Import precipitation data just for gridcodes needed
-prec_dt <- readRDS(file.path(path_intermediate_res, "precipitation_ts_settlements.rds")) #has gridcode, precipitation value in mm, timestamp
+prec_dt <- readRDS(file.path(path_intermediate_res, paste0("precipitation_ts_settlements", nam,".rds"))) #has gridcode, precipitation value in mm, timestamp; for 2010 - 2016: precipitation_ts_settlements.rds
 # setkey(prec_dt, gridcode, time)
 # prec_dt <- prec_dt[gridcode %in% gridcode_to_process &  time >= date_begin & time <= date_end] # if too slow, change to data.table filtering but mind the two keys
 
@@ -57,6 +57,9 @@ prec_dt$time <- as.POSIXct( # fix the time format (CET/CEST because of summer ti
     tz = "Etc/GMT-1"
 )
 
+
+print(paste0("The mean annual prec is:", sum(prec_dt$precipitation_mm)/(length(prec_dt$time)/8/365)))
+
 # Import share served by CS # will get that data, properly add to setup then
 # share_dt <- data.table(gridcode = unique(prec_dt$gridcode), share_served_by_CS = rep(0.28, length(gridcode_to_process)), key = "gridcode")
 share_dt <- readRDS(file.path(path_intermediate_res, "share_CS.rds"))
@@ -64,7 +67,8 @@ setDT(share_dt, key = "gridcode")
 share_dt <- share_dt[.(gridcode_to_process)]
 setkey(share_dt, gridcode)
 
-
+# custom CS share
+# share_dt$share_served_by_CS <- 0.7
 
 
 # apply cso_model to gridcodes_to_process (real data) ---------------------------------------------------------------------------------------

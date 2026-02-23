@@ -169,3 +169,52 @@ List virtual_volume_and_tank_volume_cpp(
         _["tank_volume_W"]        = tv
     );
 }
+
+
+
+
+// [[Rcpp::export]]
+NumericVector t2_1_cpp(NumericVector tank_volume,
+                       NumericVector virtual_volume_d,
+                       double W2) {
+
+    int n = tank_volume.size();
+    NumericVector v(n, NA_REAL);
+
+    for (int t = 1; t < n; ++t) {
+
+        double W_prev = tank_volume[t - 1];
+        double Vd     = virtual_volume_d[t];
+
+        double tau2;
+
+        // tank full from beginning and stays full -> overflow from time 0
+        if (W_prev == W2 && Vd >= W2) {
+            tau2 = 0.0;
+
+        // tank full previously -> the ratio from appendix B
+        } else if (W_prev == W2) {
+            tau2 = (W_prev - W2) / (W_prev - Vd);
+
+        // degenerate case -> if tau can't be determined (and Wt-1 < W2), tau2 is 1 (case where it is 0 covered by first expression)
+        } else if (W_prev == Vd) {
+            tau2 = 1.0;
+
+        // virtual volume exceeds tank -> the ratio from appendix B
+        } else if (Vd >= W2) {
+            tau2 = (W_prev - W2) / (W_prev - Vd);
+
+        // default
+        } else {
+            tau2 = 1.0;
+        }
+
+        // restrict tau2 to [0, 1]
+        if (tau2 < 0.0) tau2 = 0.0;
+        if (tau2 > 1.0) tau2 = 1.0;
+
+        v[t] = tau2;
+    }
+
+    return v;
+}

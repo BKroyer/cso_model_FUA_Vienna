@@ -11,7 +11,7 @@ load.project()
 googledrive::drive_auth()
 
 # For very small data amounts you can use
-googledrive::drive_user()
+#googledrive::drive_user()
 
 
 # Decide for GloH20 MSWEP product. From the GloH2O FAQ:
@@ -27,7 +27,7 @@ file_list <- identify_needed_nc_files(begin_date = date_begin,
                                       product = product)
 
 setDT(file_list)  # convert dribble to data.table
-# Be carefull, you can only download a file several times from googledrive, afterwards its blocked for ~24 h
+# Be careful, you can only download a file several times from googledrive, afterwards its blocked for ~24 h
 file_list[, load_and_crop_nc_files(.SD, area_of_interest = aoi_buffered_epsg4326), by = seq_len(nrow(file_list))]
 #drive_deauth()
 

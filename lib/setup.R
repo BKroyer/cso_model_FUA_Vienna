@@ -16,8 +16,8 @@ path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped") # for the prec
 
 # Time period of interest (Used in precipitation data extraction & mask when applying model) -------------------------------------
 
-date_begin <- "2010-01-01" # 2010-01-01
-date_end <- "2016-12-31" # 2020-12-31
+date_begin <- "2018-01-01" # 2010-01-01
+date_end <- "2018-12-31" # 2020-12-31
 
 # used for precipitation extraction originally:
 # date_begin <- "2010-12-15"
@@ -35,16 +35,25 @@ nam <- paste(current_years, collapse = "_")
 
 # Area of interest ---------------------------------------------------------------------------------------------------------------
 
-area_of_interest <- file.path(path_intermediate_res, "Einzugsgebiet_Eisenstadt", "Einzugsgebiet_Eisenstadt.shp") # file.path(path_intermediate_res, "FUA_vienna", "FUA_vienna.shp") # "Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp" # "Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp"
+area_of_interest <-"Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp"
+    #file.path(path_intermediate_res, "Einzugsgebiet_Eisenstadt", "Einzugsgebiet_Eisenstadt.shp")
+    # file.path(path_intermediate_res, "FUA_vienna", "FUA_vienna.shp")
+    # "Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp"
+    # "Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp"
 
-area_of_interest_name <- "Eisenstadt_Austrian_params" #Austria_default_params
+area_of_interest_name <- paste0("Eisenstadt_Austrian_params_by_paper_text", nam) #Austria_default_params
 settlements <- "Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp" # else FUA
+
+time_period_of_interest <- "2010_2016" # either "2010_2016" (for data from 2015 in imp and pop) or "2021_2025" (for data fromn 2021 used in imp and pop)
 
 # Gridcode specification (NULL to process all within AoI, else vector of gridcodes to process) -----------------------------------
 
 gridcode_to_process <- NULL #c(253253) #c(253253, 261635) # 253253 is wien, the others are random to test multiple processing #, 259334, 266367, 265844
 
 # model params for the gridcodes, either one for all or one per gridcode (vector of length of gridcodes)
+
+# default:              0.3     1.5     7       4       5       2
+# Vienna (paper):       0.3     1.5     29      2       5       2
 
 k0 <- 0.3
 W0 <- 1.5

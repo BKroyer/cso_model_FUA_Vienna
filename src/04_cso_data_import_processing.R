@@ -24,7 +24,15 @@ load.project()
 
 
 # Import population data
-pop_dt <- readRDS(file.path(path_intermediate_res, "population.rds"))
+if (time_period_of_interest == "2010_2016"){
+    pop_dt <- readRDS(file.path(path_intermediate_res, "population_2015.rds"))
+}else{
+    if(time_period_of_interest == "2021_2024"){
+        pop_dt <- readRDS(file.path(path_intermediate_res, "population_2021.rds"))
+    }else{
+        errorCondition("use either 2010_2016 or 2021_2024 as time_period_of_interest")
+    }
+}
 setDT(pop_dt, key = "settlement_id")
 pop_dt <- pop_dt[.(gridcode_to_process)]
 setkey(pop_dt, settlement_id)
@@ -32,25 +40,62 @@ pop_dt[, population := as.integer(population)]
 
 
 # Import impervious area data
-imp_dt <- readRDS(file.path(path_intermediate_res, "impervious_area_2015.rds"))
+if (time_period_of_interest == "2010_2016"){
+    imp_dt <- readRDS(file.path(path_intermediate_res, "impervious_area_2015.rds"))
+}else{
+    if(time_period_of_interest == "2021_2024"){
+        imp_dt <- readRDS(file.path(path_intermediate_res, "impervious_area_2021.rds"))
+    }else{
+        errorCondition("use either 2010_2016 or 2021_2024 as time_period_of_interest")
+    }
+}
 setDT(imp_dt, key = "settlement_id")
 imp_dt <- imp_dt[.(gridcode_to_process)]
 setkey(imp_dt, settlement_id)
 
 
 # Import precipitation data just for gridcodes needed
-prec_dt <- readRDS(file.path(path_intermediate_res, paste0("precipitation_ts_settlements", nam,".rds"))) #has gridcode, precipitation value in mm, timestamp; for 2010 - 2016: precipitation_ts_settlements.rds
-# setkey(prec_dt, gridcode, time)
-# prec_dt <- prec_dt[gridcode %in% gridcode_to_process &  time >= date_begin & time <= date_end] # if too slow, change to data.table filtering but mind the two keys
+combine_pre_years <- function(current_years) {
 
+    files <- file.path(
+        path_intermediate_res,
+        paste0("precipitation_ts_settlements_", current_years, ".rds")
+    )
+
+    dt_list <- vector("list", length(files))
+
+    for (i in seq_along(files)) {
+        dt_list[[i]] <- readRDS(files[i])
+    }
+
+    gc()
+
+    combined_temp <- data.table::rbindlist(dt_list, use.names = TRUE)
+    data.table::setkey(combined_temp, gridcode, time)
+
+    rm(dt_list)
+    gc()
+
+    return(combined_temp)
+}
+
+file_path <- file.path(
+    path_intermediate_res,
+    paste0("precipitation_ts_settlements_", nam, ".rds")
+)
+
+prec_dt <- if (file.exists(file_path)) {
+    readRDS(file_path)
+} else {
+    combine_pre_years(current_years)
+}
 
 
 setkey(prec_dt, gridcode, time)
-
 prec_dt <- prec_dt[
     data.table(gridcode = unique(gridcode_to_process)),
     on = .(gridcode)
-    ][time >= date_begin & time <= date_end]
+    ] #[time >= date_begin & time <= date_end] #option to filter by time again, only relevant if not entire years are used
 
 prec_dt$time <- as.POSIXct( # fix the time format (CET/CEST because of summer time, but I need the physical time)
     format(prec_dt$time, "%Y-%m-%d %H:%M:%S"),
@@ -60,7 +105,7 @@ prec_dt$time <- as.POSIXct( # fix the time format (CET/CEST because of summer ti
 
 print(paste0("The mean annual prec is:", sum(prec_dt$precipitation_mm)/(length(prec_dt$time)/8/365)))
 
-# Import share served by CS # will get that data, properly add to setup then
+# Import share served by CS
 # share_dt <- data.table(gridcode = unique(prec_dt$gridcode), share_served_by_CS = rep(0.28, length(gridcode_to_process)), key = "gridcode")
 share_dt <- readRDS(file.path(path_intermediate_res, "share_CS.rds"))
 setDT(share_dt, key = "gridcode")
@@ -68,7 +113,7 @@ share_dt <- share_dt[.(gridcode_to_process)]
 setkey(share_dt, gridcode)
 
 # custom CS share
-# share_dt$share_served_by_CS <- 0.7
+share_dt$share_served_by_CS <- 0.7
 
 
 # apply cso_model to gridcodes_to_process (real data) ---------------------------------------------------------------------------------------
@@ -177,7 +222,7 @@ if (save_single_files){
     setColWidths(wb, sheet, cols = 1:cols_temp, widths = widths_temp)
 
 
-    if (length(gridcode_to_process) > 5){
+    if (length(gridcode_to_process) > 2){
         results_nam <- paste0(area_of_interest_name, paste0("_", datum), ".xlsx")
 
     }else{

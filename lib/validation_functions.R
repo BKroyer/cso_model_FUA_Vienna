@@ -74,6 +74,8 @@ process_and_plot_results <- function(mod_res, path_out, used_params, validation_
 
     population <- used_params$population
 
+    # prec_sum <-
+
 
     if (is.null(mask)){
         mask <- 2:nrow(mod_res) # first row undefined in many variables (due to shift calculations)
@@ -296,6 +298,7 @@ process_and_plot_results <- function(mod_res, path_out, used_params, validation_
 
         collected_res_mm <- data.table(
             # gridcode = is added later
+            #prec_area_weighted_sum = prec_sum,
             imp_area_served_by_CS_km2 = area,
             population = population,
             annual_mean_tank_mm = annual_mean_tank, #mm

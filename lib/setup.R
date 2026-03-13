@@ -5,6 +5,7 @@ already_processed <- TRUE
 datum <- format(Sys.Date(), format="%b%d") # for naming reasons
 ln_A_B <- FALSE # calculating with typo in ln network flow scenario b?
 round_to <- 4 # number of digits to round results to (only applied to final results)
+validation_region <- TRUE
 
 
 # Data paths ---------------------------------------------------------------------------------------------------------------------
@@ -16,8 +17,8 @@ path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped") # for the prec
 
 # Time period of interest (Used in precipitation data extraction & mask when applying model) -------------------------------------
 
-date_begin <- "2018-01-01" # 2010-01-01
-date_end <- "2018-12-31" # 2020-12-31
+date_begin <- "2010-01-01" # 2010-01-01
+date_end <- "2012-12-31" # 2020-12-31
 
 # used for precipitation extraction originally:
 # date_begin <- "2010-12-15"
@@ -30,25 +31,43 @@ date_end <- "2018-12-31" # 2020-12-31
 # get years between begin and end date
 yr_begin <- year(date_begin)
 yr_end <- year(date_end)
-current_years <- as.character(seq(yr_begin, yr_end))
+current_years_num <- seq(yr_begin, yr_end)
+current_years <- as.character(current_years_num)
 nam <- paste(current_years, collapse = "_")
 
 # Area of interest ---------------------------------------------------------------------------------------------------------------
 
-area_of_interest <-"Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp"
-    #file.path(path_intermediate_res, "Einzugsgebiet_Eisenstadt", "Einzugsgebiet_Eisenstadt.shp")
-    # file.path(path_intermediate_res, "FUA_vienna", "FUA_vienna.shp")
-    # "Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp"
-    # "Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp"
+area_of_interest <-file.path(path_intermediate_res, "Einzugsgebiet_Bad_Leonfelden", "Einzugsgebiet_Bad_Leonfelden.shp")
+#file.path(path_intermediate_res, "Einzugsgebiet_Traisen", "Einzugsgebiet_AnDerTraisen_larger4.shp")
+#file.path(path_intermediate_res, "Einzugsgebiet_Eisenstadt", "Einzugsgebiet_Eisenstadt.shp")
+# file.path(path_intermediate_res, "FUA_vienna", "FUA_vienna.shp")
+# "Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp"
+# "Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp"
 
-area_of_interest_name <- paste0("Eisenstadt_Austrian_params_by_paper_text", nam) #Austria_default_params
+
+# finds factor to scale results for validation regions crossing border of Upper Danube Basin
+if (validation_region){
+    aoi_temp <- project(vect(area_of_interest), "EPSG:3035")
+    full_area_aoi <- sum(expanse(aoi_temp, unit = "km"))
+    upperdanube <- vect("data/intermediate_results/aoi_epsg3035.gpkg")
+    intersected_area_aoi <- sum(expanse(terra::crop(aoi_temp, upperdanube), unit = "km"))
+
+    factor_enlarge_validation <- full_area_aoi / intersected_area_aoi
+
+    print(paste0("Factor to scale results for validation region: ", factor_enlarge_validation))
+
+    rm(upperdanube, aoi_temp)
+}
+
+
+area_of_interest_name <- paste0("Traisen_testing_plot", nam) #Austria_default_params
 settlements <- "Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp" # else FUA
 
-time_period_of_interest <- "2010_2016" # either "2010_2016" (for data from 2015 in imp and pop) or "2021_2025" (for data fromn 2021 used in imp and pop)
+time_period_of_interest <- "2010_2016" # either "2010_2016" (for data from 2015 in imp and pop) or "2021_2024" (for data fromn 2021 used in imp and pop)
 
 # Gridcode specification (NULL to process all within AoI, else vector of gridcodes to process) -----------------------------------
 
-gridcode_to_process <- NULL #c(253253) #c(253253, 261635) # 253253 is wien, the others are random to test multiple processing #, 259334, 266367, 265844
+gridcode_to_process <- NULL#c(253253) #c(253253, 261635) # 253253 is wien, the others are random to test multiple processing #, 259334, 266367, 265844
 
 # model params for the gridcodes, either one for all or one per gridcode (vector of length of gridcodes)
 
@@ -57,10 +76,10 @@ gridcode_to_process <- NULL #c(253253) #c(253253, 261635) # 253253 is wien, the 
 
 k0 <- 0.3
 W0 <- 1.5
-dn <- 29 #7 #29
-dt <- 2 #4#2
+dn <- 7 #7 #29
+dt <- 4 #4#2
 W1 <- 5
-W2 <- 1.5
+W2 <- 2
 dwf_per_capita <- 0.2
 
 # save gridcodes one by one or summarise over all?

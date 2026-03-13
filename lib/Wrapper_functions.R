@@ -30,7 +30,8 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
         p,
         population = pop$population,
         imp_area_km2 = imp$imp_area_km2,
-        share_served_by_CS = share$share_served_by_CS
+        share_served_by_CS = share$share_served_by_CS,
+        mean_annual_prec = mean(prec$precipitation_mm * 8 * 365, na.rm=T)
     )
 
     if (imp$imp_area_km2 == 0){ # skipping settlements with 0 km² impervious surface
@@ -63,6 +64,12 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
         W2 = p$W2,
         print_params = print_params
     )
+
+    # compute monthly prec summary for graphs later
+
+
+
+
 
     # Rprof(NULL)
     # summaryRprof("cso_profile.out", lines = "show")

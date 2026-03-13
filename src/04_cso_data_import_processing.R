@@ -38,6 +38,8 @@ pop_dt <- pop_dt[.(gridcode_to_process)]
 setkey(pop_dt, settlement_id)
 pop_dt[, population := as.integer(population)]
 
+sum(pop_dt$population)
+
 
 # Import impervious area data
 if (time_period_of_interest == "2010_2016"){
@@ -54,7 +56,19 @@ imp_dt <- imp_dt[.(gridcode_to_process)]
 setkey(imp_dt, settlement_id)
 
 
+# Import share served by CS
+# share_dt <- data.table(gridcode = unique(prec_dt$gridcode), share_served_by_CS = rep(0.28, length(gridcode_to_process)), key = "gridcode")
+share_dt <- readRDS(file.path(path_intermediate_res, "share_CS.rds"))
+setDT(share_dt, key = "gridcode")
+share_dt <- share_dt[.(gridcode_to_process)]
+setkey(share_dt, gridcode)
+
+# custom CS share
+# share_dt$share_served_by_CS <- 0.7
+
+
 # Import precipitation data just for gridcodes needed
+# one year after the other - for memory reaons, crashes for ~ 7 years of data and above
 combine_pre_years <- function(current_years) {
 
     files <- file.path(
@@ -91,7 +105,7 @@ prec_dt <- if (file.exists(file_path)) {
 }
 
 
-setkey(prec_dt, gridcode, time)
+setkey(prec_dt, gridcode, time) # Memory issues?
 prec_dt <- prec_dt[
     data.table(gridcode = unique(gridcode_to_process)),
     on = .(gridcode)
@@ -105,15 +119,7 @@ prec_dt$time <- as.POSIXct( # fix the time format (CET/CEST because of summer ti
 
 print(paste0("The mean annual prec is:", sum(prec_dt$precipitation_mm)/(length(prec_dt$time)/8/365)))
 
-# Import share served by CS
-# share_dt <- data.table(gridcode = unique(prec_dt$gridcode), share_served_by_CS = rep(0.28, length(gridcode_to_process)), key = "gridcode")
-share_dt <- readRDS(file.path(path_intermediate_res, "share_CS.rds"))
-setDT(share_dt, key = "gridcode")
-share_dt <- share_dt[.(gridcode_to_process)]
-setkey(share_dt, gridcode)
 
-# custom CS share
-share_dt$share_served_by_CS <- 0.7
 
 
 # apply cso_model to gridcodes_to_process (real data) ---------------------------------------------------------------------------------------
@@ -171,16 +177,20 @@ if (save_single_files){
 
     summarized_stats <- as.data.table(t(colSums(dt_results, na.rm = TRUE)), keep.rownames = TRUE)
 
+    prec_sum <- sum(dt_params$mean_annual_prec * (dt_params$imp_area_km2 / sum(dt_params$imp_area_km2, na.rm=T)), na.rm = T)
+
     summary_overflow <- data.table(
-        metric = c("total population", "total impervious area served by CS [m²]",
+        metric = c("total population", "total impervious area served by CS [km²]", "total annual precipitation [mm]",
                    "network [mm]", "tank [mm]", "total [mm]", "total [Mm3y]"),
         model = round(c(summarized_stats$population,
                         summarized_stats$imp_area_served_by_CS_km2,
+                        prec_sum,
                         summarized_stats$annual_mean_network_mm,
                         summarized_stats$annual_mean_tank_mm,
                         summarized_stats$total_overflow_mm,
                         summarized_stats$total_overflow_Mm3y), round_to),
         validation = c(NA, round(c(summarized_stats$validation_area,
+                                   NA, # this is the groundtruth precipitation that led to the event, we do not know this
                                    summarized_stats$annual_mean_network_orig,
                                    summarized_stats$annual_mean_tank_orig,
                                    summarized_stats$total_overflow_orig,
@@ -214,7 +224,7 @@ if (save_single_files){
     sheet <- "overflow"
     addWorksheet(wb, sheet)
     writeData(wb, sheet, summary_overflow)
-    setColWidths(wb, sheet, cols = 1:cols_temp, widths = widths_temp)
+    setColWidths(wb, sheet, cols = 1:cols_temp, widths = 35)
 
     sheet <- paste0("event_metrics")
     addWorksheet(wb, sheet)

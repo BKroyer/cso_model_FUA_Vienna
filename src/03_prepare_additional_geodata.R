@@ -7,22 +7,24 @@ load.project()
 
 settlements_id <- "gridcode"
 
+#urb_3035<-val_4326
+
 # urb_3035 from setup
 urb_area <- expanse(urb_3035, unit = "km")
 
 # Impervious area
 imp_input <- rast("Q:/GIS-Daten/Europe/Copernicus_HRL_imperviousness/DATA/IMD_2015_010m_eu_03035_V2_0.tif") # EPSG 3035
-# imp_input <- rast("C:/Users/simulation/bkroyer/git_clone/cso-modell-upper-danube/data/intermediate_results/copernicus_impervious_20m_2015/IMD_2015_20m_eu_03035_d05_full.tif")
-# imp_input <- rast("C:/Users/simulation/bkroyer/git_clone/cso-modell-upper-danube/data/intermediate_results/imp_2021_merged.tif")
+# imp_input <- rast("C:/Users/simulation/bkroyer/git_clone/cso-modell-upper-danube/data_NOTREAD/intermediate_results/copernicus_impervious_20m_2015/IMD_2015_20m_eu_03035_d05_full.tif")
+# imp_input <- rast("C:/Users/simulation/bkroyer/git_clone/cso-modell-upper-danube/data/imp_2021_merged.tif")
 
 
 # terra::crs(imp_input, describe = TRUE)$code
-# 2018 used; paper used 2015; 2015 data on D:/
+# paper used 2015; 2015 data on D:/
 urb_proj_imp <- project(urb_3035, imp_input)
 imp_urb <- exact_extract(imp_input, sf::st_as_sf(urb_proj_imp), fun = "mean", append_cols = settlements_id)
 imp <- data.table(settlement_id = imp_urb$gridcode, mean_imperviousness = imp_urb$mean/100, settlement_area = urb_area)
 imp[, imp_area_km2 := settlement_area * mean_imperviousness]
-saveRDS(imp[,.(settlement_id, imp_area_km2)], file.path(path_intermediate_res, "impervious_area_2015.rds"))
+saveRDS(imp[,.(settlement_id, imp_area_km2)], file.path(path_input, "impervious_area_2021_validation_einzugsgebiete.rds"))
 
 
 # population density
@@ -30,7 +32,7 @@ popdens_raw <- rast("Q:/GIS-Daten/Europe/Population_density/EUROSTAT_GISCO_popde
 urb_proj_pop <- project(urb_3035, popdens_raw)
 pop_urb <- exact_extract(popdens_raw, sf::st_as_sf(urb_proj_pop), fun = "sum", append_cols = settlements_id)
 pop <- data.table(settlement_id = pop_urb$gridcode, population = pop_urb$sum )
-saveRDS(pop[,.(settlement_id, population)], file.path(path_intermediate_res, "population.rds"))
+saveRDS(pop[,.(settlement_id, population)], file.path(path_intermediate_res, "population_2021_validation_einzugsgebiete.rds"))
 
 # get mean of 2011 and 2018 dataset for a 2015 equivalent
 # both 2011 and 2018 dataset intersected with smaller settlements in QGIS
@@ -56,7 +58,7 @@ pop_2015 <- merge(pop_2011_dt, pop_2018_dt, by = "gridcode")
 pop_2015$TOT_P_2015 <- rowMeans(pop_2015[, c("POP_2018", "POP_2011")])
 pop_2015 <- data.table(settlement_id = pop_2015$gridcode, population = pop_2015$TOT_P_2015)
 
-saveRDS(pop_2015[,.(settlement_id, population)], file.path(path_intermediate_res, "population_2015.rds"))
+saveRDS(pop_2015[,.(settlement_id, population)], file.path(path_intermediate_res, "population_2015.rds")) # not for validatation region, requires pre-computing of 2011 and 2018 data in QGIS again
 
 
 
@@ -105,6 +107,6 @@ share_CS[is.na(share_served_by_CS), share_served_by_CS := 0.5]
 
 
 
-saveRDS(share_CS[, .(gridcode, share_served_by_CS)], file.path(path_intermediate_res, "share_CS.rds"))
+saveRDS(share_CS[, .(gridcode, share_served_by_CS)], file.path(path_intermediate_res, "share_CS_validation_einzugsgebiete.rds"))
 
 

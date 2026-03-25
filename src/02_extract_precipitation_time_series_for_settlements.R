@@ -10,7 +10,7 @@ nc_files_cropped <- list.files(path_cropped_nc, pattern = "\\.nc$", full.names =
 #nc_files_cropped[, timestep := as.POSIXct()]
 
 
-# Function to extract the correct files from nc_copped
+# Function to extract the correct files from nc_cropped
 extract_prec_year <- function(path, year_str, nc_files_cropped, nr_timesteps = 8){
     nc_files_yr <- nc_files_cropped[grepl(paste0("^", year_str, "[0-9]{3}\\."), basename(nc_files_cropped))]
 
@@ -29,40 +29,52 @@ extract_prec_year <- function(path, year_str, nc_files_cropped, nr_timesteps = 8
 }
 
 
+
+
+# Validation Einzugsgebiete
+val_einzug <- vect("C:\\Users\\simulation\\bkroyer\\git_clone\\cso-modell-upper-danube\\data\\Validation_Einzugsgebiete\\Validation_Einzugsgebiete.shp")
+val_4326 <- project(val_einzug, urb_4326)
+
+
 # loop to save extracted prec time series as rds for every specified year separately
-# for (current_years in as.character(c(2023:2024))){ # 2023 and 2024 still missing
-#     nc_files_yr <- extract_prec_year(path_cropped_nc, current_years, nc_files_cropped)
-#
-#     precip_rast <- rast(nc_files_yr)
-#     precip_rast_attributes <- data.table(time_steps = as.POSIXct(time(precip_rast)),
-#                                          names = names(precip_rast))
-#     precip_rast_attributes[, duplicates := duplicated(names)]
-#
-#
-#     # extract the precipitation for all settlements:
-#     terra::gdalCache(30000)
-#     settlements_id <- "gridcode"
-#     precip_urb <- exact_extract(precip_rast, sf::st_as_sf(urb_4326), fun = "mean", append_cols = settlements_id, stack_apply = TRUE) # prec data in in EPSG:4326
-#     # alternative with terra function. Less precise and very slow.
-#     # precip_urb <- extract(precip_rast, urb, fun = mean, ID = TRUE, na.rm = TRUE)
-#     setDT(precip_urb)
-#     rm(precip_rast)#, nc_files_cropped)
-#     gc()
-#     precip_dt <- melt(precip_urb, id.vars = settlements_id, value.name = "precipitation_mm")
-#     # saveRDS(precip_dt,"data/intermediate_results/precipitation_ts_settlements_prelim.rds")
-#     # rm(precip_urb)
-#     # gc()
-#     setkeyv(precip_dt, settlements_id)
-#     settlement_ids <- unique(precip_dt[,..settlements_id])
-#     precip_dt[, time:=as.POSIXct(variable, format = "mean.%Y%j.%H"), by = gridcode]
-#
-#     precip_dt[, variable:=NULL]
-#
-#     # Save data table as RDS as this saves much space
-#     saveRDS(precip_dt, file.path(path_intermediate_res, paste0("precipitation_ts_settlements_", current_years,".rds")))
-#     # remove preliminary data
-#     # file.remove("data/intermediate_results/precipitation_ts_settlements_prelim.rds")
-#
-# }
-#
+for (current_years in as.character(c(2011:2016))){
+    nc_files_yr <- extract_prec_year(path_cropped_nc, current_years, nc_files_cropped)
+
+    precip_rast <- rast(nc_files_yr)
+    precip_rast_attributes <- data.table(time_steps = as.POSIXct(time(precip_rast)),
+                                         names = names(precip_rast))
+    precip_rast_attributes[, duplicates := duplicated(names)]
+
+
+    # extract the precipitation for all settlements:
+    terra::gdalCache(30000)
+    settlements_id <- "gridcode"
+    #precip_urb <- exact_extract(precip_rast, sf::st_as_sf(urb_4326), fun = "mean", append_cols = settlements_id, stack_apply = TRUE) # prec data in in EPSG:4326
+
+    precip_urb <- exact_extract(precip_rast, sf::st_as_sf(val_4326), fun = "mean", append_cols = settlements_id, stack_apply = TRUE) # prec data in in EPSG:4326
+
+    # alternative with terra function. Less precise and very slow.
+    # precip_urb <- extract(precip_rast, urb, fun = mean, ID = TRUE, na.rm = TRUE)
+    setDT(precip_urb)
+    rm(precip_rast)#, nc_files_cropped)
+    gc()
+    precip_dt <- melt(precip_urb, id.vars = settlements_id, value.name = "precipitation_mm")
+    # saveRDS(precip_dt,"data/intermediate_results/precipitation_ts_settlements_prelim.rds")
+    # rm(precip_urb)
+    # gc()
+    setkeyv(precip_dt, settlements_id)
+    settlement_ids <- unique(precip_dt[,..settlements_id])
+    precip_dt[, time:=as.POSIXct(variable, format = "mean.%Y%j.%H"), by = gridcode]
+
+    precip_dt[, variable:=NULL]
+
+    # Save data table as RDS as this saves much space
+    #saveRDS(precip_dt, file.path(path_intermediate_res, paste0("precipitation_ts_settlements_", current_years,".rds")))
+
+    saveRDS(precip_dt, file.path(path_intermediate_res, paste0("precipitation_ts_validation_einzugsgebiete_", current_years,".rds")))
+    # remove preliminary data
+    # file.remove("data/intermediate_results/precipitation_ts_settlements_prelim.rds")
+
+}
+
 #

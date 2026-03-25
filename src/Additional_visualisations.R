@@ -108,80 +108,273 @@ dev.off()
 
 # change to general plot function in the validation_functions script and add the prec as transparent shape
 
-area_gridcodes <- data.table(gridcode = gridcode_to_process, area_gridcode = expanse(urb_3035[urb_3035$gridcode %in% gridcode_to_process], unit = "km"))
-area_gridcodes[, weight := area_gridcode/sum(area_gridcode)]
+# area_gridcodes <- data.table(gridcode = gridcode_to_process, area_gridcode = expanse(urb_3035[urb_3035$gridcode %in% gridcode_to_process], unit = "km"))
+# area_gridcodes[, weight := area_gridcode/sum(area_gridcode)]
+#
+# setkey(area_gridcodes, gridcode)
+#
+# prec_monthly <- prec_dt[
+#     , .(precip_mm_month = sum(precipitation_mm, na.rm = TRUE)),
+#     by = .(gridcode, year_month)
+# ]
+#
+# prec_monthly_weighted_sum <- prec_monthly[
+#     area_gridcodes,
+#     on = "gridcode"
+# ][
+#     , .(monthly_mm_weighted = sum(precip_mm_month * weight)),
+#     by = year_month
+# ]
+#
+# prec_yearly<- prec_dt[
+#     , .(precip_mm_year = sum(precipitation_mm, na.rm = TRUE)),
+#     by = .(gridcode, year)
+# ]
+#
+# prec_yearly_weighted_sum <- prec_yearly[
+#     area_gridcodes,
+#     on = "gridcode"
+# ][
+#     , .(yearly_mm_weighted = sum(precip_mm_year * weight)),
+#     by = year
+# ]
 
-setkey(area_gridcodes, gridcode)
+library(gridExtra)
+validation_plot <- function(validation_region){
 
-prec_monthly <- prec_dt[
-    , .(precip_mm_month = sum(precipitation_mm, na.rm = TRUE)),
-    by = .(gridcode, year_month)
-]
+    res_cso <- setDT(read.xlsx(path_out, sheet = "overflow_yearly"))
+    cso_col <- c(res_cso[metric == "total [Mm3y]", model]) *10^6 * factor_enlarge_validation
+    dwf_col <- c(res_cso[metric == "DWF volume [Mm3]", model]) *10^6 * factor_enlarge_validation
 
-prec_monthly_weighted_sum <- prec_monthly[
-    area_gridcodes,
-    on = "gridcode"
-][
-    , .(monthly_mm_weighted = sum(precip_mm_month * weight)),
-    by = year_month
-]
+    prec_col <- c(res_cso[metric == "total annual precipitation [mm]", model])
 
-prec_yearly<- prec_dt[
-    , .(precip_mm_year = sum(precipitation_mm, na.rm = TRUE)),
-    by = .(gridcode, year)
-]
+    time_temp <- yr_begin:yr_end
+    if (validation_region){
+        val_dat <- val_value
+    }
 
-prec_yearly_weighted_sum <- prec_yearly[
-    area_gridcodes,
-    on = "gridcode"
-][
-    , .(yearly_mm_weighted = sum(precip_mm_year * weight)),
-    by = year
-]
+    used_params <- params[1, 2:7]
+    param_text <- paste0(
+        "Model parameters\n",
+        "k0 = ", used_params$k0, "\n",
+        "W0 = ", used_params$W0, "\n",
+        "dn = ", used_params$dn, "\n",
+        "dt = ", used_params$dt, "\n",
+        "W1 = ", used_params$W1, "\n",
+        "W2 = ", used_params$W2
+    )
 
-cso_col <- c(0.2932692, 0.2064973, 0.2117195, 0.1853364, 0.3506581, 0.1484669, 0.2234508) *10^6
+    dat_temp <- data.table(cso = cso_col, prec = prec_col, time = time_temp, dwf = dwf_col)
 
-time_temp <- c(2010:2016)
-val_dat <- 221655
-used_params <- params[1, 2:7]
-param_text <- paste0(
-    "Model parameters\n",
-    "k0 = ", used_params$k0, "\n",
-    "W0 = ", used_params$W0, "\n",
-    "dn = ", used_params$dn, "\n",
-    "dt = ", used_params$dt, "\n",
-    "W1 = ", used_params$W1, "\n",
-    "W2 = ", used_params$W2
-)
+    if (validation_region){
+        p_wo_text <- ggplot(data = dat_temp, aes(x = time, y = cso)) +
+            theme_bw() +
+            geom_col(fill = "darkolivegreen3", width = 0.5, alpha = 0.9)+#, linewidth = 2) +
+            geom_point(aes(color = "Modeled CSO volume"), size = 4, shape = 21, fill = "grey30", stroke = 2) +
+            geom_hline(aes(yintercept = val_dat, color = "Validation data: CSO volume"), linewidth = 1.5, linetype = "solid", alpha = 0.9) + #, color = "lightpink"
+            geom_hline(aes(yintercept = mean(cso),  color = "Modeled mean annual CSO volume over 2010 to 2016"), linewidth = 1.5, linetype = "dashed", alpha = 0.9) +
+            geom_col(aes(y = dwf, color = "Modeled DWF content"), width = 0.48, fill = "brown4", alpha = 0.3, linewidth = 0.0000001) +
 
-dat_temp <- data.table(cso = cso_col, time = time_temp)
+            scale_color_manual(values = c("Modeled CSO volume" = "darkolivegreen3",
+                                          "Validation data: CSO volume" = "pink3",
+                                          "Modeled mean annual CSO volume over 2010 to 2016" = "darkolivegreen",
+                                          "Modeled DWF content" = "brown4")) +
 
-p_eisen<- ggplot(data = dat_temp, aes(x = time, y = cso)) +
+
+            ylab("CSO volume [m³ per year]") +
+            xlab("") +
+            labs(shape = "", color = "") +
+            theme(legend.position = "top") +
+            scale_x_continuous(breaks = seq(yr_begin, yr_end), limits = c(yr_begin-0.3, yr_end+0.3), expand = c(0,0))+
+            scale_y_continuous(labels = scales::number_format(accuracy = 1))
+    }else{
+        p_wo_text <- ggplot(data = dat_temp, aes(x = time, y = cso)) +
+            theme_bw() +
+            geom_col(fill = "darkolivegreen3", width = 0.5, alpha = 0.9)+#, linewidth = 2) +
+            geom_point(aes(color = "Modeled CSO volume"), size = 4, shape = 21, fill = "grey30", stroke = 2) +
+            #geom_hline(aes(yintercept = val_dat, color = "Validation data: CSO volume"), linewidth = 1.5, linetype = "solid", alpha = 0.9) + #, color = "lightpink"
+            geom_hline(aes(yintercept = mean(cso),  color = "Modeled mean annual CSO volume over 2010 to 2016"), linewidth = 1.5, linetype = "dashed", alpha = 0.9) +
+            geom_col(aes(y = dwf, color = "Modeled DWF content"), width = 0.48, fill = "brown4", alpha = 0.3, linewidth = 0.0000001) +
+
+            scale_color_manual(values = c("Modeled CSO volume" = "darkolivegreen3",
+                                          #"Validation data: CSO volume" = "pink3",
+                                          "Modeled mean annual CSO volume over 2010 to 2016" = "darkolivegreen",
+                                          "Modeled DWF content" = "brown4")) +
+
+
+            ylab("CSO volume [m³ per year]") +
+            xlab("") +
+            labs(shape = "", color = "") +
+            theme(legend.position = "top") +
+            scale_x_continuous(breaks = seq(yr_begin, yr_end), limits = c(yr_begin-0.3, yr_end+0.3), expand = c(0,0))+
+            scale_y_continuous(labels = scales::number_format(accuracy = 1))
+    }
+
+
+
+    validation_code_text <- validation_code
+    if (!validation_region){
+        validation_code_text <- ""
+    }
+
+    validation_annotation <- ggplot() +
+        annotate("text", x = 0.5, y = 0, label = validation_code_text, size = 12, fontface = "bold") +
+        theme_void() +
+        theme(plot.margin = margin(b = 0.5))
+
+
+    param_plot <- ggplot() +
+        annotate("text", x = 0, y = 0.145, label = param_text, hjust = 0, vjust = 0, size = 3.2) +
+        theme_void() +
+        xlim(0, 1) + ylim(0, 1)
+
+    empty_plot <- ggplot() +
+        annotate("text", x = 0, y = 0.25, label = "", hjust = 0, vjust = 1, size = 3.2) +
+        theme_void() +
+        xlim(0, 1) + ylim(0, 1)
+
+
+    prec_add <- ggplot(data = dat_temp, aes(x = time, group = 1)) +
+        geom_ribbon(aes(ymin = 0, ymax = prec), fill = "lightblue3", color = "lightblue4", alpha = 0.8, linewidth = 1) +
+        theme_bw() +
+        #scale_x_continuous(breaks = paste0(seq(yr_begin, yr_end), "-01"), labels = seq(yr_begin, yr_end))
+        scale_x_continuous(breaks = seq(yr_begin, yr_end), limits = c(yr_begin-0.3, yr_end+0.3), expand = c(0,0)) +
+        scale_y_continuous(breaks = seq(0,1500,250))+#, limits = c(0,1000)) +
+        labs(x = "", y = "Precipitation [mm]")
+
+    pdf(file.path(path_intermediate_res, paste0(area_of_interest_name, "_resultsplot.pdf")), width = 9.2, height = 6.5)
+    #pdf(file.path(path_intermediate_res, paste0("Traisen_reduced_default_params", "_resultsplot.pdf")), width = 9.2, height = 6.5)
+    #full_plot <- grid.arrange(p_wo_text, param_plot, prec_add, empty_plot, nrow = 2, heights = c(2, 1.3), widths = c(2,0.3))
+
+
+    full_plot <-grid.arrange(grobs = list(p_wo_text, param_plot, validation_annotation, prec_add, empty_plot),
+                             heights = c(0.25, 0.5, 1.25, 1.3), widths = c(2,1,0.5),
+                             layout_matrix = rbind(c(1,1,NA),
+                                                   c(1,1,3),
+                                                   c(1,1,2),
+                                                   c(4,4,5))
+    )
+    dev.off()
+
+}
+
+validation_plot(validation_region = validation_region)
+validation_plot(validation_region = TRUE)
+
+
+# plot showing all validation regions results as offset from validation value in per cent (middle line: 1: perfect match)
+file_list <- list.files(path_intermediate_res, pattern = paste0(datum, "\\.xlsx$"), full.names = TRUE)
+val_files <- file_list[grepl(paste0("^[A-Z]_", datum, "\\.xlsx$"), basename(file_list))]
+
+val_dt <- NULL
+for (val_file in val_files){
+    val_res <- setDT(read.xlsx(val_file, sheet = 4))
+    gridcode <- letter2 <- sub("_.*$", "", basename(val_file))
+
+    cso_val <- as.numeric(val_res[metric == "total [Mm3y]", "annual_means_scaled"] * 10^6)
+    val_value <- as.numeric(val_data[Code == gridcode, Value])
+
+    val_temp <- data.table(gridcode = gridcode, cso_val = cso_val, val_value = val_value)
+    val_dt <- rbind(val_dt, val_temp)
+}
+
+val_dt[, bias := (cso_val - val_value) / val_value * 100]
+
+
+#library(scales)
+
+val_dt$gridcode <- factor(val_dt$gridcode, levels = val_dt$gridcode)
+
+bias_plot <- ggplot(val_dt, aes(x = gridcode, y = bias)) +
+    geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+    geom_segment(aes(x = gridcode, xend = gridcode, y = 0, yend = bias),
+                 color = "grey50") +
+    geom_point(size = 3) +
+    scale_y_continuous(breaks = seq(floor(min(val_dt$bias)/20)*20,
+                                    ceiling(max(val_dt$bias)/20)*20,
+                                    by = 10),
+                       labels = function(x) paste0(x, "%")) +
+    labs(y = "Bias to validation value (%)", x = "Gridcode") +
+    theme_bw()
+
+pdf("bias_plot_extracted_CS.pdf", width = 8, height = 5)
+print(bias_plot)
+dev.off()
+
+
+# check regions with few inhabitants
+
+austria_res_temp <- setDT(read.xlsx(file.path(path_intermediate_res, "Austria_default_dn302010_2011_2012_2013_2014_2015_2016_Mar24.xlsx"), sheet = 2))
+austria_prec_add <- setDT(read.xlsx(file.path(path_intermediate_res, "Austria_default_dn302010_2011_2012_2013_2014_2015_2016_Mar24.xlsx"), sheet = 1))
+austria_res_temp <- merge.data.table(austria_res_temp, austria_prec_add[, c("gridcode", "mean_annual_prec")], by = "gridcode")
+
+
+# ggplot(data = austria_res_temp, aes(x = population, y = total_overflow_Mm3y)) +
+#     scale_x_log10() +
+#     geom_point() +
+#     theme_bw()
+#
+# ggplot(data = austria_res_temp, aes(x = mean_annual_prec/population, y = total_overflow_Mm3y)) +
+#     geom_point() +
+#     theme_bw()
+
+
+# events plots
+res_event <- setDT(read.xlsx(path_out, sheet = "event_metrics_yearly"))
+res_nr_events <- rbind(
+    data.table(year = res_event$year,
+               nr_of_events = res_event$nr_of_rain_events,
+               event_duration = as.numeric(res_event$mean_rain_duration_per_event),
+               mean_volume_per_event_mm = as.numeric(res_event$mean_rain_volume_per_event_mm),
+               event_type = "rain event"),
+
+    data.table(year = res_event$year,
+               nr_of_events = res_event$nr_of_overflow_events,
+               event_duration = as.numeric(res_event$mean_overflow_duration_per_event),
+               mean_volume_per_event_mm = as.numeric(res_event$mean_overflow_volume_per_event_mm),
+               event_type = "overflow event"))
+
+
+scaling_duration <- max(res_nr_events$nr_of_events)/max(res_nr_events$mean_volume_per_event_mm)
+p_event <- ggplot(data = res_nr_events, aes(x = year)) +
     theme_bw() +
-    # geom_line(color = "darkolivegreen3", linewidth = 2) +
-    geom_point(aes(color = "Modeled CSO volume [m³ per year]"), size = 4, shape = 21, fill = "grey30", stroke = 2) +
-    geom_hline(aes(yintercept = val_dat, color = "Validation data: CSO volume [m³ per year]"), linewidth = 1.5, linetype = "solid", alpha = 0.9) + #, color = "lightpink"
-    geom_hline(aes(yintercept = mean(cso),  color = "Modeled mean annual CSO volume over 2010 to 2016"), linewidth = 1.5, linetype = "dashed", alpha = 0.9) +
-    scale_color_manual(values = c("Modeled CSO volume [m³ per year]" = "darkolivegreen3", "Validation data: CSO volume [m³ per year]" = "pink3", "Modeled mean annual CSO volume over 2010 to 2016" = "darkolivegreen")) +
-    ylab("CSO volume [m³ per year]") +
-    xlab("") +
-    labs(shape = "", color = "") +
+    geom_col(aes(y = nr_of_events, fill = event_type), position = "dodge", width = 0.7) +
+    #geom_col(aes(y = nr_of_overflow_events, color = "annual mean number of overflow events"), fill = "pink2", position = "dodge") +
     theme(legend.position = "top") +
-    scale_x_continuous(breaks = seq(yr_begin, yr_end))
+    labs(color = "", fill = "", y = "Modeled annual number of events", x = "") +
+    scale_fill_manual(values = c(
+        "overflow event" = "pink2",
+        "rain event" = "lightblue3"
+    )) +
+
+    geom_point(aes(y = mean_volume_per_event_mm*scaling_duration, color = event_type, group = event_type), size = 5) +
+    geom_line(aes(y = mean_volume_per_event_mm*scaling_duration, color = event_type, group = event_type), linewidth = 1) +
+    scale_color_manual(values = c(
+        "overflow event" = "pink3",
+        "rain event" = "lightblue4"
+    )) +
+    scale_y_continuous(breaks = seq(0,400, 20),
+                        sec.axis = sec_axis(~./scaling_duration, name = "Mean volume per event [mm]", breaks = seq(0,30,2))) +
+    theme(
+        #axis.title.y = element_text(color = temperatureColor, size=13),
+        axis.title.y.left = element_text(color = "grey40")
+    )
+
+p_event
+
+pdf(file.path(path_intermediate_res, paste0("Austria_default_paramsdn30", "_eventsplot.pdf")), width = 8, height = 5)
+print(p_event)
+dev.off()
 
 
-param_plot <- ggplot() +
-    annotate("text", x = 0, y = 0.25, label = param_text, hjust = 0, vjust = 1, size = 3.2) +
-    theme_void() +
-    xlim(0, 1) + ylim(0, 1)
 
-p_eisen + param_plot + plot_layout(widths = c(4, 1))
 
-# add precipitation as plot below with the same x axis
-#prec_add <- ggplot(data = prec_monthly, aes(x = year_month, y = precip_mm_month, group = 1)) +
-prec_add <- ggplot(data = prec_yearly, aes(x = year, y = precip_mm_year, group = 1)) +
-    geom_line() +
-    theme_bw()# +
-    #scale_x_continuous(breaks = paste0(seq(yr_begin, yr_end), "-01"), labels = seq(yr_begin, yr_end))
-    #scale_x_continuous(breaks = seq(yr_begin, yr_end))
-prec_add
+
+
+
+
+
+
+
+
+

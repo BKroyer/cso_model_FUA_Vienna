@@ -172,12 +172,12 @@ validation_plot <- function(validation_region){
             geom_col(fill = "darkolivegreen3", width = 0.5, alpha = 0.9)+#, linewidth = 2) +
             geom_point(aes(color = "Modeled CSO volume"), size = 4, shape = 21, fill = "grey30", stroke = 2) +
             geom_hline(aes(yintercept = val_dat, color = "Validation data: CSO volume"), linewidth = 1.5, linetype = "solid", alpha = 0.9) + #, color = "lightpink"
-            geom_hline(aes(yintercept = mean(cso),  color = "Modeled mean annual CSO volume over 2010 to 2016"), linewidth = 1.5, linetype = "dashed", alpha = 0.9) +
+            geom_hline(aes(yintercept = mean(cso),  color = "Modeled mean annual CSO volume"), linewidth = 1.5, linetype = "dashed", alpha = 0.9) +
             geom_col(aes(y = dwf, color = "Modeled DWF content"), width = 0.48, fill = "brown4", alpha = 0.3, linewidth = 0.0000001) +
 
             scale_color_manual(values = c("Modeled CSO volume" = "darkolivegreen3",
                                           "Validation data: CSO volume" = "pink3",
-                                          "Modeled mean annual CSO volume over 2010 to 2016" = "darkolivegreen",
+                                          "Modeled mean annual CSO volume" = "darkolivegreen",
                                           "Modeled DWF content" = "brown4")) +
 
 
@@ -193,12 +193,12 @@ validation_plot <- function(validation_region){
             geom_col(fill = "darkolivegreen3", width = 0.5, alpha = 0.9)+#, linewidth = 2) +
             geom_point(aes(color = "Modeled CSO volume"), size = 4, shape = 21, fill = "grey30", stroke = 2) +
             #geom_hline(aes(yintercept = val_dat, color = "Validation data: CSO volume"), linewidth = 1.5, linetype = "solid", alpha = 0.9) + #, color = "lightpink"
-            geom_hline(aes(yintercept = mean(cso),  color = "Modeled mean annual CSO volume over 2010 to 2016"), linewidth = 1.5, linetype = "dashed", alpha = 0.9) +
+            geom_hline(aes(yintercept = mean(cso),  color = "Modeled mean annual CSO volume"), linewidth = 1.5, linetype = "dashed", alpha = 0.9) +
             geom_col(aes(y = dwf, color = "Modeled DWF content"), width = 0.48, fill = "brown4", alpha = 0.3, linewidth = 0.0000001) +
 
             scale_color_manual(values = c("Modeled CSO volume" = "darkolivegreen3",
                                           #"Validation data: CSO volume" = "pink3",
-                                          "Modeled mean annual CSO volume over 2010 to 2016" = "darkolivegreen",
+                                          "Modeled mean annual CSO volume" = "darkolivegreen",
                                           "Modeled DWF content" = "brown4")) +
 
 
@@ -239,7 +239,7 @@ validation_plot <- function(validation_region){
         theme_bw() +
         #scale_x_continuous(breaks = paste0(seq(yr_begin, yr_end), "-01"), labels = seq(yr_begin, yr_end))
         scale_x_continuous(breaks = seq(yr_begin, yr_end), limits = c(yr_begin-0.3, yr_end+0.3), expand = c(0,0)) +
-        scale_y_continuous(breaks = seq(0,1500,250))+#, limits = c(0,1000)) +
+        scale_y_continuous(breaks = seq(0,1500,200))+#, limits = c(0,1000)) +
         labs(x = "", y = "Precipitation [mm]")
 
     pdf(file.path(path_intermediate_res, paste0(area_of_interest_name, "_resultsplot.pdf")), width = 9.2, height = 6.5)
@@ -259,45 +259,71 @@ validation_plot <- function(validation_region){
 }
 
 validation_plot(validation_region = validation_region)
-validation_plot(validation_region = TRUE)
+#validation_plot(validation_region = TRUE)
+
+
+
 
 
 # plot showing all validation regions results as offset from validation value in per cent (middle line: 1: perfect match)
 file_list <- list.files(path_intermediate_res, pattern = paste0(datum, "\\.xlsx$"), full.names = TRUE)
-val_files <- file_list[grepl(paste0("^[A-Z]_", datum, "\\.xlsx$"), basename(file_list))]
+val_files <- file_list[grepl(paste0("^[A-Z]_extractedCS_2021_2022_2023_2024_", datum, "\\.xlsx$"), basename(file_list))]
+
+# for the "best resonable" bias
+# val_files <- c("data_NOTREAD/intermediate_results/A_Mar31.xlsx", "data_NOTREAD/intermediate_results/B_Mar31.xlsx", "data_NOTREAD/intermediate_results/D_Mar31.xlsx",
+#                "data_NOTREAD/intermediate_results/E_extractedCS_2021_2022_2023_2024_Mar31.xlsx", "data_NOTREAD/intermediate_results/F_extractedCS_2021_2022_2023_2024_Mar31.xlsx",
+#                "data_NOTREAD/intermediate_results/G_Mar31.xlsx", "data_NOTREAD/intermediate_results/I_Mar31.xlsx", "data_NOTREAD/intermediate_results/J_Mar31.xlsx" )
 
 val_dt <- NULL
 for (val_file in val_files){
-    val_res <- setDT(read.xlsx(val_file, sheet = 4))
+    val_res <- setDT(read.xlsx(val_file, sheet = 3))
     gridcode <- letter2 <- sub("_.*$", "", basename(val_file))
 
-    cso_val <- as.numeric(val_res[metric == "total [Mm3y]", "annual_means_scaled"] * 10^6)
+    cso_val <- val_res[metric == "total [Mm3y]", c("year", "model")]
     val_value <- as.numeric(val_data[Code == gridcode, Value])
 
-    val_temp <- data.table(gridcode = gridcode, cso_val = cso_val, val_value = val_value)
+    val_temp <- data.table(gridcode = gridcode, year = cso_val$year, cso_val = cso_val$model * 10^6, val_value = val_value)
     val_dt <- rbind(val_dt, val_temp)
 }
+
+#val_dt <- val_dt[year != "2024"]
+# val_dt <- val_dt[, .("cso_val" = mean(cso_val),
+#            val_value = unique(val_value)),
+#        by = gridcode]
+
+# # just the means compare (one dot per gridcode)
+# for (val_file in val_files){
+#     val_res <- setDT(read.xlsx(val_file, sheet = 4))
+#     gridcode <- letter2 <- sub("_.*$", "", basename(val_file))
+#
+#     cso_val <- as.numeric(val_res[metric == "total [Mm3y]", "annual_means_scaled"] * 10^6)
+#     val_value <- as.numeric(val_data[Code == gridcode, Value])
+#
+#     val_temp <- data.table(gridcode = gridcode, cso_val = cso_val, val_value = val_value)
+#     val_dt <- rbind(val_dt, val_temp)
+# }
 
 val_dt[, bias := (cso_val - val_value) / val_value * 100]
 
 
 #library(scales)
 
-val_dt$gridcode <- factor(val_dt$gridcode, levels = val_dt$gridcode)
+#val_dt$gridcode <- factor(val_dt$gridcode, levels = val_dt$gridcode)
 
-bias_plot <- ggplot(val_dt, aes(x = gridcode, y = bias)) +
+bias_plot <- ggplot(val_dt, aes(x = gridcode, y = bias, color = year)) +#, color = year
     geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
     geom_segment(aes(x = gridcode, xend = gridcode, y = 0, yend = bias),
                  color = "grey50") +
-    geom_point(size = 3) +
+    geom_point(size = 3) + #, alpha = 0.7
     scale_y_continuous(breaks = seq(floor(min(val_dt$bias)/20)*20,
                                     ceiling(max(val_dt$bias)/20)*20,
                                     by = 10),
                        labels = function(x) paste0(x, "%")) +
-    labs(y = "Bias to validation value (%)", x = "Gridcode") +
+    labs(y = "Bias to validation value (%)", x = "Gridcode", color = "") + #, color = ""
     theme_bw()
 
-pdf("bias_plot_extracted_CS.pdf", width = 8, height = 5)
+#pdf("bias_plot_manual_CS_laterTP.pdf", width = 8, height = 5)
+pdf("bias_plot_best_reasonable_wo2024.pdf", width = 8, height = 5)
 print(bias_plot)
 dev.off()
 

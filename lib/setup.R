@@ -1,38 +1,33 @@
 # File that defines data, constants or variables for the analysis and will be run automatically
 # by Bettina Kroyer
 
-already_processed <- TRUE
+already_processed <- FALSE
 datum <- format(Sys.Date(), format="%b%d") # for naming reasons
 ln_A_B <- FALSE # calculating with typo in ln network flow scenario b?
 round_to <- 4 # number of digits to round results to (only applied to final results)
 validation_region <- FALSE
-validation_code <- "J"
-use_default_params <- TRUE # using the default model parameters, and dn 30 for Austria and Germany
+validation_code <- "I"
+use_default_params <- FALSE # using the default model parameters, and dn 30 for Austria and Germany
 
 
 # Data paths ---------------------------------------------------------------------------------------------------------------------
 
 path_intermediate_res <- file.path("data_NOTREAD", "intermediate_results") # for the results and processed input data
 path_input <- file.path("data")
-path_raw_nc <- file.path(path_intermediate_res, "nc_raw") # for the precipitation data extraction for settlements
-path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped") # for the precipitation data extraction for settlements
+#path_raw_nc <- file.path(path_intermediate_res, "nc_raw") # for the precipitation data extraction for settlements
+#path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped") # for the precipitation data extraction for settlements
+
+path_raw_nc <- file.path(path_intermediate_res, "nc_raw_AUT") # for the precipitation data extraction for settlements for Austria
+path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped_AUT") # for the precipitation data extraction for settlements for Austria
 
 
 # Time period of interest (Used in precipitation data extraction & mask when applying model) -------------------------------------
 
-date_begin <- "2021-01-01" # 2010-01-01
-date_end <- "2024-12-31" # 2020-12-31
+date_begin <- "2010-01-01" # 2010-01-01
+date_end <- "2016-12-31" # 2020-12-31
 
 
-time_period_of_interest <- "2021_2024" # either "2010_2016" (for data from 2015 in imp and pop) or "2021_2024" (for data from 2021 used in imp and pop)
-
-# used for precipitation extraction originally:
-# date_begin <- "2010-12-15"
-# date_end <- "2020-12-31"
-
-# used in paper
-#date_begin <- "2001-01-01"
-#date_end <- "2016-12-31"
+time_period_of_interest <- "2010_2016" # either "2010_2016" (for data from 2015 in imp and pop) or "2021_2024" (for data from 2021 used in imp and pop)
 
 # get years between begin and end date
 yr_begin <- year(date_begin)
@@ -43,7 +38,8 @@ nam <- paste(current_years, collapse = "_")
 
 # Area of interest ---------------------------------------------------------------------------------------------------------------
 
-area_of_interest <- file.path(path_intermediate_res, "FUA_vienna", "FUA_vienna.shp")
+area_of_interest <- "Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp"
+area_of_interest_name <- paste0("AUT_default", nam) #Austria_default_params
 
 #file.path(path_intermediate_res, "Einzugsgebiet_Traisen", "traisen_reduced.shp")
 #file.path(path_intermediate_res, "Einzugsgebiet_Bad_Leonfelden", "Einzugsgebiet_Bad_Leonfelden.shp")
@@ -53,6 +49,12 @@ area_of_interest <- file.path(path_intermediate_res, "FUA_vienna", "FUA_vienna.s
 # "Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp"
 # "Q:/Projekte/PROMISCES/Modeling/MoRE catchments/catchment_units.shp"
 #"C:\\Users\\simulation\\bkroyer\\git_clone\\cso-modell-upper-danube\\data\\Validation_Einzugsgebiete\\Validation_Einzugsgebiete.shp"
+
+# relevant for the pre-processing: precipitation, imperviousness, population and CS share data will be extracted for the specified settlements
+settlements <- "Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp"
+
+#"Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp" # else FUA or the validation regions; used in the wrapper_preprocess_data only! so check if processing needed
+#"C:\\Users\\simulation\\bkroyer\\git_clone\\cso-modell-upper-danube\\data\\Validation_Einzugsgebiete\\Validation_Einzugsgebiete.shp"#
 
 
 # finds factor to scale results for validation regions crossing border of Upper Danube Basin
@@ -73,28 +75,27 @@ if (validation_region){
 
     rm(upperdanube, aoi_temp)
 
-    val_data <- setDT(read.xlsx(file.path(path_intermediate_res, "Validation_data.xlsx")))
+    val_data <- setDT(read.xlsx(file.path(path_intermediate_res, "Validation_data.xlsx"), sheet = 1))
     val_value <- val_data[Code == validation_code, Value]
-    manual_CS <- FALSE
-    #manual_CS <- val_data[Code == validation_code, CS]
-    manual_pop <- val_data[Code == validation_code, Pop_2015]
+    #manual_CS <- FALSE
+    manual_CS <- val_data[Code == validation_code, CS]
 
+    if (time_period_of_interest == "2021_2024"){
+        manual_pop <- val_data[Code == validation_code, Pop2018_2023]
+    } else {
+        manual_pop <- val_data[Code == validation_code, Pop_2015]
+    }
 
 }else{
     factor_enlarge_validation <- 1
 }
 
 
-#area_of_interest_name <- paste0(validation_code,"_default_params_", nam) #Austria_default_params
-area_of_interest_name <- paste0("Vienna_try_2021_2024", nam) #Austria_default_params
-settlements <- "Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp"
 
-#"Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp" # else FUA or the validation regions; used in the wrapper_preprocess_data only! so check if processing needed
-#"C:\\Users\\simulation\\bkroyer\\git_clone\\cso-modell-upper-danube\\data\\Validation_Einzugsgebiete\\Validation_Einzugsgebiete.shp"#
 
 # Gridcode specification (NULL to process all within AoI, else vector of gridcodes to process) -----------------------------------
 
-gridcode_to_process <- NULL#c(253253, 261635) #NULL#c(253253) #c(253253, 261635) # 253253 is wien, the others are random to test multiple processing #, 259334, 266367, 265844
+gridcode_to_process <- NULL#271107 #NULL#c(253253, 261635) #NULL#c(253253) #c(253253, 261635) # 253253 is wien, the others are random to test multiple processing #, 259334, 266367, 265844
 
 # model params for the gridcodes, either one for all or one per gridcode (vector of length of gridcodes)
 
@@ -113,11 +114,11 @@ if (use_default_params){
 
     # option to manually change the parameters
     k0 <- 0.3
-    W0 <- 0.5
-    dn <- 6 #7 #29
-    dt <- 3 #4#2
-    W1 <- 1.2
-    W2 <- 0.5
+    W0 <- 1.5
+    dn <- 30
+    dt <- 4
+    W1 <- 5
+    W2 <- 2
 }
 
 dwf_per_capita <- 0.2
@@ -129,10 +130,6 @@ if (!validation_region){ # for validation regions: Cs share and population from 
     manual_pop <- FALSE #FALSE#19640#88361 # specify number of connected inhabitants or set to FALSE to use Eurostat population data
     manual_CS <- FALSE #0.86 # specify the CS share or set to FALSE to extract from CS share data
 }
-
-
-# not implemented yet
-sum_input <- FALSE # decide if all input should be aggregated prior to the model as one big gridcell
 
 
 # Data processing / calling -------------------------------------------------------------------------------------------------------
@@ -156,7 +153,8 @@ if (already_processed){
 
 }else{
 
-    wrapper_preprocess_data(area_of_interest, settlements)
+    preprocessed <- wrapper_preprocess_data(area_of_interest, settlements)
+    list2env(preprocessed, envir = .GlobalEnv)
     ### Area of interest: thesis: Upper Danube Basin (catchment_units); paper: Europe FUA (671) (lavalle)
 
 }

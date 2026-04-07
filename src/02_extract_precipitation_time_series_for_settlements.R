@@ -37,7 +37,7 @@ val_4326 <- project(val_einzug, urb_4326)
 
 
 # loop to save extracted prec time series as rds for every specified year separately
-for (current_years in as.character(c(2011:2016))){
+for (current_years in as.character(c(2010:2016))){
     nc_files_yr <- extract_prec_year(path_cropped_nc, current_years, nc_files_cropped)
 
     precip_rast <- rast(nc_files_yr)
@@ -49,9 +49,10 @@ for (current_years in as.character(c(2011:2016))){
     # extract the precipitation for all settlements:
     terra::gdalCache(30000)
     settlements_id <- "gridcode"
-    #precip_urb <- exact_extract(precip_rast, sf::st_as_sf(urb_4326), fun = "mean", append_cols = settlements_id, stack_apply = TRUE) # prec data in in EPSG:4326
+    precip_urb <- exact_extract(precip_rast, sf::st_as_sf(urb_4326), fun = "mean", append_cols = settlements_id, stack_apply = TRUE) # prec data in in EPSG:4326
 
-    precip_urb <- exact_extract(precip_rast, sf::st_as_sf(val_4326), fun = "mean", append_cols = settlements_id, stack_apply = TRUE) # prec data in in EPSG:4326
+    # for the validation regions
+    #precip_urb <- exact_extract(precip_rast, sf::st_as_sf(val_4326), fun = "mean", append_cols = settlements_id, stack_apply = TRUE) # prec data in in EPSG:4326
 
     # alternative with terra function. Less precise and very slow.
     # precip_urb <- extract(precip_rast, urb, fun = mean, ID = TRUE, na.rm = TRUE)
@@ -71,10 +72,8 @@ for (current_years in as.character(c(2011:2016))){
     # Save data table as RDS as this saves much space
     #saveRDS(precip_dt, file.path(path_intermediate_res, paste0("precipitation_ts_settlements_", current_years,".rds")))
 
-    saveRDS(precip_dt, file.path(path_intermediate_res, paste0("precipitation_ts_validation_einzugsgebiete_", current_years,".rds")))
+    saveRDS(precip_dt, file.path(path_intermediate_res, paste0("precipitation_ts_AUT_", current_years,".rds")))
     # remove preliminary data
     # file.remove("data/intermediate_results/precipitation_ts_settlements_prelim.rds")
 
 }
-
-#

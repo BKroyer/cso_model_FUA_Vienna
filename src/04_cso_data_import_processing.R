@@ -26,10 +26,11 @@ load.project()
 if (!validation_region){
     # Import population data
     if (time_period_of_interest == "2010_2016"){
-        pop_dt <- readRDS(file.path(path_input, "population_2015.rds"))
+        pop_dt <- readRDS(file.path(path_input, "population_2015_AUT.rds"))
     }else{
         if(time_period_of_interest == "2021_2024"){
-            pop_dt <- readRDS(file.path(path_input, "population_2021.rds"))
+            #pop_dt <- readRDS(file.path(path_input, "population_2021.rds"))
+            pop_dt <- readRDS(file.path(path_input, "population_2021_AUT.rds"))
         }else{
             errorCondition("use either 2010_2016 or 2021_2024 as time_period_of_interest")
         }
@@ -45,10 +46,11 @@ if (!validation_region){
 
     # Import impervious area data
     if (time_period_of_interest == "2010_2016"){
-        imp_dt <- readRDS(file.path(path_input, "impervious_area_2015.rds"))
+        imp_dt <- readRDS(file.path(path_input, "impervious_area_2015_AUT.rds"))
     }else{
         if(time_period_of_interest == "2021_2024"){
-            imp_dt <- readRDS(file.path(path_input, "impervious_area_2021.rds"))
+            #imp_dt <- readRDS(file.path(path_input, "impervious_area_2021.rds"))
+            imp_dt <- readRDS(file.path(path_input, "impervious_area_2021_AUT.rds"))
         }else{
             errorCondition("use either 2010_2016 or 2021_2024 as time_period_of_interest")
         }
@@ -60,10 +62,12 @@ if (!validation_region){
 
     # Import share served by CS
     # share_dt <- data.table(gridcode = unique(prec_dt$gridcode), share_served_by_CS = rep(0.28, length(gridcode_to_process)), key = "gridcode")
-    share_dt <- readRDS(file.path(path_input, "share_CS.rds"))
+    #share_dt <- readRDS(file.path(path_input, "share_CS.rds"))
+    share_dt <- readRDS(file.path(path_input, "share_CS_AUT.rds"))
     setDT(share_dt, key = "gridcode")
     share_dt <- share_dt[.(gridcode_to_process)]
     setkey(share_dt, gridcode)
+    share_dt[share_served_by_CS>1, share_served_by_CS := share_served_by_CS/100]
 
     # custom CS share
     if (manual_CS){
@@ -79,7 +83,8 @@ if (!validation_region){
         pop_dt <- data.table(settlement_id = gridcode_to_process, population = manual_pop)
     }else{
         if(time_period_of_interest == "2021_2024"){
-            pop_dt <- readRDS(file.path(path_input, "population_2021_validation_einzugsgebiete.rds"))
+            pop_dt <- data.table(settlement_id = gridcode_to_process, population = manual_pop) # using the specified mean pop from 2018-2023
+            #pop_dt <- readRDS(file.path(path_input, "population_2021_validation_einzugsgebiete.rds"))
         }else{
             errorCondition("use either 2010_2016 or 2021_2024 as time_period_of_interest")
         }
@@ -114,6 +119,7 @@ if (!validation_region){
     setDT(share_dt, key = "gridcode")
     share_dt <- share_dt[.(gridcode_to_process)]
     setkey(share_dt, gridcode)
+    share_dt[share_served_by_CS>1, share_served_by_CS := share_served_by_CS/100]
 
     # custom CS share
     if (manual_CS){
@@ -122,7 +128,17 @@ if (!validation_region){
     }
 }
 
-print(share_dt)
+
+# testing differences in impervious area
+# tt <- merge(share_dt, imp_dt, by.x = "gridcode", by.y = "settlement_id")
+# tt <- merge(tt, pop_dt, by.x = "gridcode", by.y = "settlement_id")
+# cor(tt$population, tt$imp_area_km2) # 0.997
+# tt$weight <- tt$imp_area_km2 / sum(tt$imp_area_km2)
+# cs_weighted <- sum(tt$share_served_by_CS * tt$weight)
+# 0.58 instead of 0.28 is +107%
+#plot()
+
+#print(share_dt)
 
 # Import precipitation data just for gridcodes needed
 # one year after the other - for memory reasons, crashes for ~ 7 years of data and above
@@ -206,7 +222,8 @@ for (year_temp in current_years){
     } else {
         file_path <- file.path(
             path_input,
-            paste0("precipitation_ts_settlements_", year_temp, ".rds")
+            #paste0("precipitation_ts_settlements_", year_temp, ".rds")
+            paste0("precipitation_ts_AUT_", year_temp, ".rds")
         )
     }
 
@@ -223,7 +240,7 @@ for (year_temp in current_years){
     prec_dt_year <- prec_dt_year[
         data.table(gridcode = unique(gridcode_to_process)),
         on = .(gridcode)
-    ] #[time >= date_begin & time <= date_end] #option to filter by time again, only relevant if not entire years are used
+    ]#[time >= date_begin & time <= date_end] #option to filter by time again, only relevant if not entire years are used
 
     prec_dt_year$time <- as.POSIXct( # fix the time format (CET/CEST because of summer time, but I need the physical time)
         format(prec_dt_year$time, "%Y-%m-%d %H:%M:%S"),
@@ -311,9 +328,9 @@ for (year_temp in current_years){
         summarized_stats <- as.data.table(t(colSums(dt_results[,-c("year", "gridcode")], na.rm = TRUE)), keep.rownames = TRUE)
 
         summary_overflow <- data.table(
-            metric = c("total population", "total impervious area served by CS [km²]", "total annual precipitation [mm]",
+            metric = c("total population (connected)", "total impervious area served by CS [km²]", "total annual precipitation [mm]",
                        "network [mm]", "tank [mm]", "total [mm]", "total [Mm3y]", "DWF volume [mm]", "DWF volume [Mm3]"),
-            model = round(c(summarized_stats$population,
+            model = round(c(summarized_stats$population_connected,
                             summarized_stats$imp_area_served_by_CS_km2,
                             prec_sum,
                             summarized_stats$annual_mean_network_mm,
@@ -396,7 +413,7 @@ for (year_temp in current_years){
 
             summary_overflow_means[, annual_means_scaled := annual_means * factor_enlarge_validation]
 
-            print(summary_overflow_means)
+            #print(summary_overflow_means)
 
             writeData(wb, sheet_overflow, summary_overflow_means)
             setColWidths(wb, sheet_overflow, cols = 1:cols_temp, widths = 35)
@@ -526,7 +543,7 @@ for (year_temp in current_years){
 
     }
 
-    if (length(gridcode_to_process) > 2){
+    if (length(gridcode_to_process) > 2 | validation_region == TRUE){
         results_nam <- paste0(area_of_interest_name, paste0("_", datum), ".xlsx")
 
     }else{

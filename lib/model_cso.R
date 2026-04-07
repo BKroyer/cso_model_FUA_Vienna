@@ -8,7 +8,7 @@
 ##########################################################################################################
 
 cso_model <- function(
-    population = NA,                    # numeric. Population of the catchment area. Must be > 0. If not given, pop_density must be given.
+    population = NA,                    # numeric. Population of the catchment area discharging into the combined sewer (connected people). Must be > 0. If not given, pop_density must be given.
     area = NA,                          # numeric impervious catchment area in km². Must be > 0. If not given, pop_density must be given.
     pop_density = NA,                   # population density in persons per km² impervious area served by CS. If missing is calculated from impervious area, population and share_served_by_CS.
     share_served_by_CS = NA,            # share of population served by CS. According to Quaranta et al. (2022) mostly as the national average. If not given, pop_density (by impervious area!) must be given.

@@ -316,7 +316,7 @@ process_and_plot_results <- function(mod_res, path_out, used_params, validation_
             # gridcode = is added later
             #prec_area_weighted_sum = prec_sum,
             imp_area_served_by_CS_km2 = area,
-            population = population,
+            population_connected = population,
             annual_mean_tank_mm = annual_mean_tank, #mm
             annual_mean_network_mm = annual_mean_network, #mm
             total_overflow_mm = total_overflow, #mm

@@ -1,86 +1,103 @@
-# data[, A := runoff + qdwf - k1 * W1]
-# data[, B := runoff + qdwf - shift(network_flow, 1L)]
+# Investiagting the difference the typo ln(A/B) instead of ln(B/A) can make
 
 # Realistic values for A: 0 to circa 50 ? (if bigger, design massively misjudged)
 # Realistic values for B: circa -50 to 50, but > 0 for case b, so again 0 to 50
 
-A_vals <- seq(0.01, 50.001, 1)
-B_vals <- seq(0.01, 50.001, 1)
-k1_vals <- 1
-
-network_overflow_with_B_A <- function(A, B, k1 = k1_vals){
-    return( A * (1 - (1 + log(B/A)) / k1) + B / k1 * exp(-k1))
-}
-
-network_overflow_with_A_B <- function(A, B, k1 = k1_vals){
-    return( A * (1 - (1 + log(A/B)) / k1) + B / k1 * exp(-k1))
+B_fun <- function(R,Q){
+    return(R + Q)
 }
 
 
-
-data_temp <- CJ(A = A_vals, B = B_vals)
-data_temp[, ratio := A/B]
-data_temp[, overflow_B_A := network_overflow_with_B_A(A, B)]
-data_temp[, overflow_A_B := network_overflow_with_A_B(A, B)]
-data_temp[, diff := overflow_B_A - overflow_A_B]
-data_temp[, old_to_new := overflow_A_B/overflow_B_A]
-
-data_temp[, pct_diff := 100 * (overflow_A_B - overflow_B_A) / overflow_A_B]
-# Avoid Inf/NaN if overflow_A_B ~ 0
-data_temp[overflow_A_B == 0, pct_diff := NA_real_]
-
-data_unique <- data.table(ratio = unique(data_temp$ratio))
-#data_unique[, overflow_old_new := net]
+A_fun <- function(R, Q, dn){
+    return(R + Q * (1-dn))
+}
 
 
-p1 <- ggplot(data_temp, aes(x = A, y = B, fill = diff)) +
-    geom_tile() +
-    scale_fill_gradient2(low = "blue", mid = "white", high = "red") +
-    labs(title = "Difference between log(B/A) and log(A/B) in network overflow",
-         fill = "B_A - A_B") +
+k1_fun <- function(dn, Q, W1){
+    return((dn*Q)/W1)
+}
+
+
+logterm <- function(A,B,k1){
+    return(log(B/A)*(A/k1))
+}
+
+
+R_vec <- seq(0, 50, 0.5)    # mm
+Q_vec <- seq(0, 1, 0.05)    # mm
+dn_vec <- seq(0, 35, 1)     # -
+W1_vec <- seq(0.1, 10, 0.1) # mm
+
+max_val <- -Inf
+max_params <- NULL
+
+results <- list()
+for (R in R_vec) {
+    for (Q in Q_vec) {
+        B <- B_fun(R, Q)
+        # precompute matrices for dn and W1
+        # compute A for all dn
+        A_dn <- R + Q * (1 - dn_vec)    # vector length length(dn_vec)
+        valid_dn_idx <- which(A_dn > 0 & B >= A_dn)  # A>0 and B>=A
+        if (length(valid_dn_idx) == 0) next
+
+        # loop over valid dn only
+        for (i in valid_dn_idx) {
+            dn <- dn_vec[i]
+            A <- A_dn[i]
+            # k1 varies with W1; vectorize over W1
+            k1_vec <- k1_fun(dn, Q, W1_vec)
+            valid_k1_idx <- which(k1_vec > 0)
+            if (length(valid_k1_idx) == 0) next
+            k1_v <- k1_vec[valid_k1_idx]
+            # compute logterm vectorized
+            v <- logterm(A, B, k1_v)
+            # filter finite values
+            v[!is.finite(v)] <- NA
+            if (all(is.na(v))) next
+            vmax <- max(v, na.rm = TRUE)
+            if (vmax > max_val) {
+                max_val <- vmax
+                W1_best <- W1_vec[valid_k1_idx][which.max(v)]
+                max_params <- list(R=R, Q=Q, dn=dn, W1=W1_best, A=A, B=B,
+                                    k1=k1_fun(dn,Q,W1_best))
+            }
+        }
+        # store max per (R,Q) for plotting
+        # for speed compute maximal v across dn and W1 (approx)
+        # brute force small loops:
+        max_v_RQ <- -Inf
+        for (dn in dn_vec) {
+            A <- R + Q * (1 - dn)
+            if (!(A > 0 && B >= A)) next
+            for (W1 in W1_vec) {
+                k1 <- k1_fun(dn, Q, W1)
+                if (!(k1 > 0)) next
+                v <- logterm(A, B, k1)
+                if (!is.finite(v)) next
+                if (v > max_v_RQ) max_v_RQ <- v
+            }
+        }
+        results[[length(results)+1]] <- data.table(R=R, Q=Q, dn=dn, A=A, B=B, W1=W1,vmax=max_v_RQ)
+    }
+}
+
+dt <- rbindlist(results)
+# remove -Inf rows
+dt <- dt[is.finite(vmax)]
+
+# Plot heatmap of vmax over R and Q
+p <- ggplot(dt, aes(x=R, y=Q, fill=vmax)) +
+    geom_raster(interpolate=FALSE) +
+    scale_fill_viridis_c(option="magma", na.value="white") +
+    labs(fill="max logterm", x="R (mm)", y="Q (mm)") +
     theme_bw()
-p1
 
+# mark best point
+if (!is.null(max_params)) {
+    p <- p + geom_point(aes(x=max_params$R, y=max_params$Q), color="cyan", size=3)
+}
 
-data_temp[, ratio := A/B]
-
-data_ratio <- data_temp[, .(
-    mean_diff = mean(diff, na.rm = TRUE),
-    median_diff = median(diff, na.rm = TRUE),
-    max_diff = max(diff, na.rm = TRUE),
-    pct_diff_mean = mean(pct_diff, na.rm = TRUE)
-), by = ratio]
-
-# Plot mean difference vs ratio
-ggplot(data_ratio, aes(x = ratio, y = mean_diff)) +
-    geom_line(color = "red") +
-    labs(title = "Mean absolute difference vs A/B ratio", x = "A/B", y = "Mean diff (B_A - A_B)") +
-    theme_minimal()
-
-# plot of ratio old results to correct ones
-p3 <- ggplot(data_temp, aes(x = A, y = B, fill = old_to_new)) +
-    geom_tile() +
-    scale_fill_gradient2(low = "blue", mid = "white", high = "red") +
-    labs(title = "Ratio in network overflow using log(A/B) vs. log(B/A)",
-         fill = "A_B/B_A") +
-    theme_bw()
-p3
-
-
-data_temp[, ratio_bin := cut(ratio, breaks = seq(0, 50, 0.5))]
-
-ggplot(data_temp, aes(x = ratio_bin, y = pct_diff)) +
-    geom_boxplot(outlier.size = 0.5) +
-    labs(title = "Percentage difference distribution by A/B ratio",
-         x = "A/B ratio", y = "% difference") +
-    theme_bw() +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
-
-data_temp[, rel_diff := diff / A]  # or /B depending on reference
-
-ggplot(data_temp, aes(x = ratio, y = k1_vals[1], fill = rel_diff)) +
-    geom_tile() +
-    scale_fill_gradient2(low="blue", mid="white", high="red", midpoint=0) +
-    labs(title = "Relative difference as function of A/B ratio", x="A/B", y="k1", fill="Relative diff") +
-    theme_minimal()
+print(p)
+max_val
+max_params

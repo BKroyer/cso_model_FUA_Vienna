@@ -233,25 +233,6 @@ validation_plot(validation_region = validation_region)
 file_list <- list.files(path_intermediate_res, pattern = paste0(datum, "\\.xlsx$"), full.names = TRUE)
 val_files <- file_list[grepl(paste0("^[A-Z]_", datum, "\\.xlsx$"), basename(file_list))]
 
-
-val_files <- c("data_NOTREAD/intermediate_results/A_extractedCS_2021_2022_2023_2024_Mar31.xlsx",
-               "data_NOTREAD/intermediate_results/B_extractedCS_2021_2022_2023_2024_Mar31.xlsx",
-               "data_NOTREAD/intermediate_results/D_extractedCS_2021_2022_2023_2024_Mar31.xlsx",
-               "data_NOTREAD/intermediate_results/E_extractedCS_2021_2022_2023_2024_Mar31.xlsx",
-               "data_NOTREAD/intermediate_results/F_extractedCS_2021_2022_2023_2024_Mar31.xlsx",
-               "data_NOTREAD/intermediate_results/J_extractedCS_2021_2022_2023_2024_Mar31.xlsx",
-               "data_NOTREAD/intermediate_results/I_extracted_scaling_2021_2022_2023_2024_Apr08.xlsx",
-               "data_NOTREAD/intermediate_results/G_extracted_scaling_2021_2022_2023_2024_Apr08.xlsx")
-
-
-#"data_NOTREAD/intermediate_results/E_test_scaling_2021_2022_2023_2024_Apr08.xlsx"
-#"data_NOTREAD/intermediate_results/I_test_scaling_2021_2022_2023_2024_Apr08.xlsx"
-
-# for the "best resonable" bias
-# val_files <- c("data_NOTREAD/intermediate_results/A_Mar31.xlsx", "data_NOTREAD/intermediate_results/B_Mar31.xlsx", "data_NOTREAD/intermediate_results/D_Mar31.xlsx",
-#                "data_NOTREAD/intermediate_results/E_extractedCS_2021_2022_2023_2024_Mar31.xlsx", "data_NOTREAD/intermediate_results/F_extractedCS_2021_2022_2023_2024_Mar31.xlsx",
-#                "data_NOTREAD/intermediate_results/G_Mar31.xlsx", "data_NOTREAD/intermediate_results/I_Mar31.xlsx", "data_NOTREAD/intermediate_results/J_Mar31.xlsx" )
-
 val_dt <- NULL
 for (val_file in val_files){
     val_res <- setDT(read.xlsx(val_file, sheet = 3))

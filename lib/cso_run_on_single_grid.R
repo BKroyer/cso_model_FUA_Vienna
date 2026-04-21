@@ -11,7 +11,6 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
                                         prec_dt,
                                         manual_pop = FALSE,
                                         year_temp = year_temp,
-                                        save_single_files = FALSE,
                                         print_params = FALSE,
                                         ln_A_B = ln_A_B) {
 
@@ -90,15 +89,6 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
     t2 <- Sys.time()
     runtime <- as.numeric(difftime(t2, t1, units = "secs"))
 
-    # ensure data.table + attach gridcode
-    #res_dt <- as.data.table(res) # too large for that idea of rbinding everything
-    #res_dt[, gridcode := gridcode]
-
-    # save used values
-    # used_vals <- cbind(p, pop$population, imp$imp_area_km2, share$share_served_by_CS)
-
-
-
     min_time <- min(prec$time) #get(min_time)
     max_time <- max(prec$time) #get(max_time)
 
@@ -106,39 +96,26 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
     results_nam <- paste0(location, paste0("_", datum, "_y", substr(min_time, 1, 4), "_",  substr(max_time, 1, 4)))
 
 
+    path_out <- file.path(path_intermediate_res, area_of_interest_name_temp)
 
-    if (save_single_files == TRUE){
-        path_out <- file.path(path_intermediate_res, results_nam)
+    single_row_results <-  process_and_plot_results(res, path_out, location = location, used_params = used_vals, gridcode_temp = gridcode_temp)
 
-        wb_path <- process_and_plot_results(res, path_out, location = location, used_params = used_vals, save_single_files = save_single_files, gridcode_temp = gridcode_temp)#, validation_data = data_vienna, validation_area = 70)
-        return(list(
-            gridcode = gridcode_temp,
-            runtime_secs = runtime,
-            workbook_path = wb_path
-        ))
+    single_params <- single_row_results$used_params
+    single_row <- single_row_results$collected_res_mm
+    event_res <- single_row_results$event_res
 
-    }else{
-        path_out <- file.path(path_intermediate_res, area_of_interest_name_temp)
-
-        single_row_results <-  process_and_plot_results(res, path_out, location = location, used_params = used_vals, save_single_files = save_single_files, gridcode_temp = gridcode_temp)
-
-        single_params <- single_row_results$used_params
-        single_row <- single_row_results$collected_res_mm
-        event_res <- single_row_results$event_res
-
-        # add year and gridcode to single row
-        gridcode_dt <- data.table(year = year_temp, gridcode = gridcode_temp)
-        # pop_temp <- data.table(population = single_params$population)
-        single_row <- cbind(gridcode_dt, single_row)
-        event_res <- cbind(gridcode_dt, event_res)
-        return(list(
-            gridcode = gridcode_temp,
-            runtime_secs = runtime,
-            single_params = single_params,
-            single_row = single_row,
-            event_res = event_res
-        ))
-    }
+    # add year and gridcode to single row
+    gridcode_dt <- data.table(year = year_temp, gridcode = gridcode_temp)
+    # pop_temp <- data.table(population = single_params$population)
+    single_row <- cbind(gridcode_dt, single_row)
+    event_res <- cbind(gridcode_dt, event_res)
+    return(list(
+        gridcode = gridcode_temp,
+        runtime_secs = runtime,
+        single_params = single_params,
+        single_row = single_row,
+        event_res = event_res
+    ))
 
 }
 

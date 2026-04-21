@@ -41,7 +41,7 @@ nam <- paste(current_years, collapse = "_")
 # Area of interest ---------------------------------------------------------------------------------------------------------------
 
 area_of_interest <- file.path(path_intermediate_res, "FUA_vienna", "FUA_vienna.shp")
-area_of_interest_name <- paste0("Vienna_NOTlnerror_", nam) #Austria_default_params
+area_of_interest_name <- paste0("Vienna_NOTlnerror_checkchanges_", nam) #Austria_default_params
 
 #file.path(path_intermediate_res, "Einzugsgebiet_Traisen", "traisen_reduced.shp")
 #file.path(path_intermediate_res, "Einzugsgebiet_Bad_Leonfelden", "Einzugsgebiet_Bad_Leonfelden.shp")

@@ -1,4 +1,4 @@
-# Script to visualise prec data
+# Script to visualise prec data, cso and event results, sensitivity analysis results, bias to validation data
 # by Bettina Kroyer
 
 
@@ -103,42 +103,6 @@ dev.off()
 
 
 
-
-# quick Eisenstadt test
-
-# change to general plot function in the validation_functions script and add the prec as transparent shape
-
-# area_gridcodes <- data.table(gridcode = gridcode_to_process, area_gridcode = expanse(urb_3035[urb_3035$gridcode %in% gridcode_to_process], unit = "km"))
-# area_gridcodes[, weight := area_gridcode/sum(area_gridcode)]
-#
-# setkey(area_gridcodes, gridcode)
-#
-# prec_monthly <- prec_dt[
-#     , .(precip_mm_month = sum(precipitation_mm, na.rm = TRUE)),
-#     by = .(gridcode, year_month)
-# ]
-#
-# prec_monthly_weighted_sum <- prec_monthly[
-#     area_gridcodes,
-#     on = "gridcode"
-# ][
-#     , .(monthly_mm_weighted = sum(precip_mm_month * weight)),
-#     by = year_month
-# ]
-#
-# prec_yearly<- prec_dt[
-#     , .(precip_mm_year = sum(precipitation_mm, na.rm = TRUE)),
-#     by = .(gridcode, year)
-# ]
-#
-# prec_yearly_weighted_sum <- prec_yearly[
-#     area_gridcodes,
-#     on = "gridcode"
-# ][
-#     , .(yearly_mm_weighted = sum(precip_mm_year * weight)),
-#     by = year
-# ]
-
 library(gridExtra)
 validation_plot <- function(validation_region){
 
@@ -153,12 +117,12 @@ validation_plot <- function(validation_region){
         val_dat <- val_value
     }
 
-    used_params <- params[1, 2:7]
+    used_params <- params[[1]][1, 2:7]
     param_text <- paste0(
         "Model parameters\n",
         "k0 = ", used_params$k0, "\n",
         "W0 = ", used_params$W0, "\n",
-        "dn = ", used_params$dn, "\n",
+        "dn = ", used_params$dn, " (AUT/GER: 30)\n",
         "dt = ", used_params$dt, "\n",
         "W1 = ", used_params$W1, "\n",
         "W2 = ", used_params$W2
@@ -267,7 +231,21 @@ validation_plot(validation_region = validation_region)
 
 # plot showing all validation regions results as offset from validation value in per cent (middle line: 1: perfect match)
 file_list <- list.files(path_intermediate_res, pattern = paste0(datum, "\\.xlsx$"), full.names = TRUE)
-val_files <- file_list[grepl(paste0("^[A-Z]_extractedCS_2021_2022_2023_2024_", datum, "\\.xlsx$"), basename(file_list))]
+val_files <- file_list[grepl(paste0("^[A-Z]_", datum, "\\.xlsx$"), basename(file_list))]
+
+
+val_files <- c("data_NOTREAD/intermediate_results/A_extractedCS_2021_2022_2023_2024_Mar31.xlsx",
+               "data_NOTREAD/intermediate_results/B_extractedCS_2021_2022_2023_2024_Mar31.xlsx",
+               "data_NOTREAD/intermediate_results/D_extractedCS_2021_2022_2023_2024_Mar31.xlsx",
+               "data_NOTREAD/intermediate_results/E_extractedCS_2021_2022_2023_2024_Mar31.xlsx",
+               "data_NOTREAD/intermediate_results/F_extractedCS_2021_2022_2023_2024_Mar31.xlsx",
+               "data_NOTREAD/intermediate_results/J_extractedCS_2021_2022_2023_2024_Mar31.xlsx",
+               "data_NOTREAD/intermediate_results/I_extracted_scaling_2021_2022_2023_2024_Apr08.xlsx",
+               "data_NOTREAD/intermediate_results/G_extracted_scaling_2021_2022_2023_2024_Apr08.xlsx")
+
+
+#"data_NOTREAD/intermediate_results/E_test_scaling_2021_2022_2023_2024_Apr08.xlsx"
+#"data_NOTREAD/intermediate_results/I_test_scaling_2021_2022_2023_2024_Apr08.xlsx"
 
 # for the "best resonable" bias
 # val_files <- c("data_NOTREAD/intermediate_results/A_Mar31.xlsx", "data_NOTREAD/intermediate_results/B_Mar31.xlsx", "data_NOTREAD/intermediate_results/D_Mar31.xlsx",
@@ -317,13 +295,13 @@ bias_plot <- ggplot(val_dt, aes(x = gridcode, y = bias, color = year)) +#, color
     geom_point(size = 3) + #, alpha = 0.7
     scale_y_continuous(breaks = seq(floor(min(val_dt$bias)/20)*20,
                                     ceiling(max(val_dt$bias)/20)*20,
-                                    by = 10),
+                                    by = 20),
                        labels = function(x) paste0(x, "%")) +
     labs(y = "Bias to validation value (%)", x = "Gridcode", color = "") + #, color = ""
     theme_bw()
 
-#pdf("bias_plot_manual_CS_laterTP.pdf", width = 8, height = 5)
-pdf("bias_plot_best_reasonable_wo2024.pdf", width = 8, height = 5)
+pdf("bias_plot_extracted_CS_laterTP_scalingchanged.pdf", width = 8, height = 5)
+#pdf("bias_plot_best_reasonable_wo2024.pdf", width = 8, height = 5)
 print(bias_plot)
 dev.off()
 
@@ -388,19 +366,138 @@ p_event <- ggplot(data = res_nr_events, aes(x = year)) +
 
 p_event
 
-pdf(file.path(path_intermediate_res, paste0("Austria_default_paramsdn30", "_eventsplot.pdf")), width = 8, height = 5)
+pdf(file.path(path_intermediate_res, paste0("Austria_default_paramsdn30_later_", "_eventsplot.pdf")), width = 8, height = 5)
 print(p_event)
 dev.off()
 
 
 
 
+# sensitivity analysis plots
+#file_list <- list.files(file.path(path_intermediate_res, "G_sensitivity_param_plots"), pattern = paste0(datum, "\\.xlsx$"), full.names = TRUE)
+file_list <- list.files(file.path(path_intermediate_res, "G_sensitivity_param_plots"), pattern = paste0(datum, "\\.xlsx$"), full.names = TRUE)
+
+sens_files <- file_list[grepl(paste0(validation_code,"_sensitivity"), basename(file_list))]
+
+sens_files <- sens_files[grepl("_prec_", sens_files)]
+
+sens_dt <- NULL
+for (sens_file in sens_files){
+    sens_res <- setDT(read.xlsx(sens_file, sheet = 4))
+    gridcode <- letter2 <- sub("_.*$", "", basename(sens_file))
+    param_nam_split <- strsplit(gsub(paste0("_", datum, ".xlsx"), "", sens_file),"_")
+    param_val <- as.numeric(param_nam_split[[1]][[length(param_nam_split[[1]])]])
+    param_nam <- param_nam_split[[1]][[length(param_nam_split[[1]]) - 1]]
+
+    cso_val <- as.numeric(sens_res[metric == "total [Mm3y]", c("annual_means_scaled")])
+
+    sens_temp <- data.table(param = param_nam, gridcode = gridcode, param_val = param_val, cso_val = cso_val * 10^6)
+    sens_dt <- rbind(sens_dt, sens_temp)
+}
+
+p_sens <- ggplot(data = sens_dt, aes(x = param_val, y = cso_val)) +
+    theme_bw() +
+    geom_line() +
+    geom_point(size = 2.5) +
+    labs(x = param_nam, y = "Modeled CSO volume [m³], Application period") +
+    #scale_y_continuous(breaks = seq(100000, 250000, 10000), limits = c(100000, 250000)) +
+    scale_x_continuous(breaks = varying_param)+
+    labs(x = "Precipitation change factor ")
+p_sens
+
+#saveRDS(sens_dt, file.path(path_intermediate_res, "G_sensitivity_param_plots", paste0(validation_code ,"_", param_nam,"_sensitivity_plot.rds")))
+saveRDS(sens_dt, file.path(path_intermediate_res, "E_sensitivity_param_plots", paste0(validation_code ,"_", param_nam,"_sensitivity_plot.rds")))
 
 
 
 
 
+# arrange plot of all 6 params
+combined_dt <- NULL
+#for (pp in c("W0", "k0", "W1", "W2", "dn", "dt")){
+for (pp in c("dt", "dn", "W2", "W1", "k0", "W0")){
+    #p <- setDT(readRDS(file.path(path_intermediate_res, "G_sensitivity_param_plots", paste0("G_", pp,"_sensitivity_plot.rds"))))
+    p <- setDT(readRDS(file.path(path_intermediate_res, "E_sensitivity_param_plots", paste0("E_", pp,"_sensitivity_plot.rds"))))
+
+    combined_dt <- rbind(combined_dt, p)
+}
+
+
+break_list <- list(
+    dt = seq(2, 20, 1), #dt
+    dn = seq(3, 30, 1), #dn
+    W2 = seq(0.2, 9.8, 0.8), #W2
+    W1 = seq(0.6, 5, 0.4), #W1
+    k0 = seq(0.1, 2.1, 0.2), # k0
+    W0 = seq(0.2, 5, 0.4) # W0
+
+)
+
+scale_x_custom <- function(...) {
+    scale_x_continuous(..., breaks = function(x) {
+        # attempt to infer current panel by looking at x range
+        # choose the break set whose range overlaps x
+        # sel <- sapply(break_list, function(b) {
+        #     (min(x) >= min(b) - 2 && max(x) <= max(b) + 2) ||
+        #         (min(x) >= min(b) - 1*(max(b)-min(b)) && max(x) <= max(b) + 1*(max(b)-min(b)))
+        # })
+        # if (any(sel)) return(break_list[[which(sel)[1]]])
+        # fallback: pretty breaks for that panel range
+        pretty(x, n = 10)
+    })
+}
+
+p_sens <- ggplot(data = combined_dt, aes(x = param_val, y = cso_val)) +
+    theme_bw() +
+    geom_line() +
+    geom_point(size = 2.5) +
+    labs(x = param_nam, y = "Modeled CSO volume [m³], Application period") +
+    facet_wrap(~param, scales = "free_x", ncol = 2) +
+    #scale_y_continuous(breaks = seq(200000, 300000, 10000), limits = c(200000, 300000)) +
+    scale_x_custom() +
+    labs(x  = "")
+
+p_sens
+
+#pdf(file.path(path_intermediate_res, "G_sensitivity_param_plots", "G_param_plot.pdf"), width = 9, height = 12)
+pdf(file.path(path_intermediate_res, "G_sensitivity_param_plots", "G_param_plot_prec.pdf"), width = 6, height = 5)
+
+print(p_sens)
+dev.off()
 
 
 
+# k1_fun <- function(qdwf, dn, W1){
+#     return(qdwf*dn/W1)
+# }
+#
+#
+# k1_c <- c()
+# for (dn_temp in seq(3,30,1)){
+#     k1_c <- c(dn_c, k1_fun(0.0684449, dn_temp, 5))
+# }
 
+qdwf <- 0.0684449
+
+qdwf*5/5
+
+
+qdwf_pop <- (manual_pop/1.4251) * 0.21 /8/1000
+
+qdwf_pop*30/5
+
+dn3 <- readRDS(file.path(path_intermediate_res, paste0("data_dn", 3)))
+dn4 <- readRDS(file.path(path_intermediate_res, paste0("E_data_dn", 4)))
+dn5 <- readRDS(file.path(path_intermediate_res, paste0("E_data_dn", 5)))
+dn6 <- readRDS(file.path(path_intermediate_res, paste0("E_data_dn", 6)))
+dn8 <- readRDS(file.path(path_intermediate_res, paste0("E_data_dn", 8)))
+dn11 <- readRDS(file.path(path_intermediate_res, paste0("E_data_dn", 11)))
+
+
+plot_G_dwf <- readRDS("C:\\Users\\simulation\\bkroyer\\git_clone\\cso-modell-upper-danube\\data_NOTREAD\\intermediate_results\\G_DWF per capita_sensitivity_plot.rds")
+
+
+dt12 <- readRDS(file.path(path_intermediate_res, paste0("data_dt", 12)))
+dt14 <- readRDS(file.path(path_intermediate_res, paste0("data_dt", 14)))
+dt15 <- readRDS(file.path(path_intermediate_res, paste0("data_dt", 15)))
+dt16 <- readRDS(file.path(path_intermediate_res, paste0("data_dt", 16)))

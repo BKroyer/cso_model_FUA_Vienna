@@ -19,15 +19,16 @@ cso_model <- function(
     qdwf = NA,                          # The DWF in mm/m²/timestep for entire population
     W0 = 1.5,                           # W0 Maximum surface storage capacity of the catchment (water retained on impervious surfaces before runoff begins) [mm]. Default: 1.5 mm (Quaranta et al. 2022)
     k0 = 0.3,                           # k0 Reservoir constant for surface storage [1/timestep].Default: 0.3/(3 hours) (represents depletion of surface storage during dry periods).
-    dn = 4,                             # Dilution rate of the sewer network [-]. Defines the maximum network capacity relative to DWF. Default: 4.
-    dt = 7,                             # Dilution rate of the tank [-]. Defines the maximum tank outflow capacity relative to DWF. Default: 7.
+    dn = 7,                             # Dilution rate of the sewer network [-]. Defines the maximum network capacity relative to DWF. Default: 7.
+    dt = 4,                             # Dilution rate of the tank [-]. Defines the maximum tank outflow capacity relative to DWF. Default: 4.
     W1 = 5,                             # Network storage capacity [mm]. Default: 5 mm (storage capacity of the sewer network before overflow).
     W2 = 2,                             # Tank storage capacity [mm]. Default: 2 mm (capacity of the retention tank before overflow).
-    print_params = FALSE
+    print_params = FALSE,
+    ln_A_B = FALSE
     ){
 
     ## Check input data type
-    if (!is.na(population)) assert_count(population)
+    if (!is.na(population)) assert_numeric(population)#assert_count(population)
     assert_number(area, na.ok = TRUE, lower = 0, finite = TRUE)
     if (!is.na(area) & !(area > 0)) stop(sprintf("area must be > 0, but is %s", area))
     assert_posixct(time, any.missing = FALSE, min.len = 8, unique = TRUE, null.ok = FALSE, sorted = TRUE)
@@ -39,7 +40,7 @@ cso_model <- function(
     assert_number(dn, na.ok = FALSE, lower = 3, upper = 40,  null.ok = FALSE) # max was 20; stuttgart is 40
     assert_number(dt, na.ok = FALSE, lower = 1.5, upper = 24,  null.ok = FALSE) # max was 20; min was 3 Santiago says 1.5
     assert_number(W1, na.ok = FALSE, lower = 0.05, upper = 13,  null.ok = FALSE) # max was 5, Ecully says 13
-    assert_number(W2, na.ok = FALSE, lower = 0.05, upper = 7,  null.ok = FALSE) # max was 5
+    assert_number(W2, na.ok = FALSE, lower = 0.05, upper = 10,  null.ok = FALSE) # max was 5
 
     ### basic parameter calculation
 
@@ -111,7 +112,7 @@ cso_model <- function(
         print(paste0("CS share is ", round(share_served_by_CS, 4)))
     }
 
-
+    #print(paste0("qdwf is ", qdwf))
 
 
     # Create model dat object
@@ -175,7 +176,7 @@ cso_model <- function(
         B = B,
         scenario = scenario,
         k1 = k1,
-        ln_A_B = FALSE,   # or TRUE if needed
+        ln_A_B = ln_A_B,   # or TRUE if needed
         e_k1 = e_k1
     )]
 
@@ -399,7 +400,7 @@ cso_model <- function(
 
 
 
-    if (!(sum(is.na(data$Eb)) == 1 & sum(is.na(data$tau1)) <= 1 & sum(is.na(data$tau2)) == 1)){
+    if (!(sum(is.na(data$Eb)) <= 1 & sum(is.na(data$tau1)) <= 1 & sum(is.na(data$tau2)) <= 1)){
         print("NA warnings NOT ok for Eb, tau1 and/or tau2")
 
     }#else{
@@ -418,6 +419,7 @@ cso_model <- function(
         stop("Error: data contains Inf or -Inf values. Most probably due to a log expression being 0.")
     }
 
+    #saveRDS(data, file.path(path_intermediate_res, paste0("E_data_dn", dn)))
 
     return(data)
 }

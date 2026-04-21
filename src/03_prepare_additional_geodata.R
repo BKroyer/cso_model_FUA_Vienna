@@ -30,7 +30,7 @@ popdens_raw <- rast("Q:/GIS-Daten/Europe/Population_density/EUROSTAT_GISCO_popde
 urb_proj_pop <- project(urb_3035, popdens_raw)
 pop_urb <- exact_extract(popdens_raw, sf::st_as_sf(urb_proj_pop), fun = "sum", append_cols = settlements_id)
 pop <- data.table(settlement_id = pop_urb$gridcode, population = pop_urb$sum )
-saveRDS(pop[,.(settlement_id, population)], file.path(path_input, "population_2021_AUT.rds"))
+saveRDS(pop[,.(settlement_id, population)], file.path(path_input, "population_2021.rds"))
 
 # get mean of 2011 and 2018 dataset for a 2015 equivalent
 # both 2011 and 2018 dataset intersected with smaller settlements in QGIS
@@ -59,7 +59,7 @@ pop_2015 <- merge(pop_2011_dt, pop_2018_dt, by = "gridcode")
 pop_2015$TOT_P_2015 <- rowMeans(pop_2015[, c("POP_2018", "POP_2011")])
 pop_2015 <- data.table(settlement_id = pop_2015$gridcode, population = pop_2015$TOT_P_2015)
 
-saveRDS(pop_2015[,.(settlement_id, population)], file.path(path_input, "population_2015_AUT.rds")) # not for validatation region, requires pre-computing of 2011 and 2018 data in QGIS again
+saveRDS(pop_2015[,.(settlement_id, population)], file.path(path_input, "population_2015.rds")) # not for validatation region, requires pre-computing of 2011 and 2018 data in QGIS again
 
 
 
@@ -74,8 +74,11 @@ saveRDS(pop_2015[,.(settlement_id, population)], file.path(path_input, "populati
 
 # share of CS
 # CS_share_combined_wo_Hungary_Slovakia.gpkg
-share_CS_input <- vect(file.path(path_intermediate_res, "combined.gpkg"))
-#share_CS_input <- vect(file.path(path_intermediate_res, "share_on_AoI_all", "share_on_AoI_all.shp"))
+#share_CS_input <- vect(file.path(path_intermediate_res, "combined.gpkg"))
+share_CS_input <- vect(file.path(path_intermediate_res, "share_on_AoI_all", "share_on_AoI_all.shp"))
+
+share_CS_input$share_num[share_CS_input$CNTR_CODE. == "CZ"] <- 0.7 # updating CZ data to 70\%, see Cools et al (2016)
+
 # share_CS <- data.table(gridcode = unique(prec_dt$gridcode), share_served_by_CS = 0.28, key = "gridcode") # Update with the actual data
 # terra::crs(share_CS_input, describe = TRUE)$code
 urb_proj_share_CS <- project(urb_3035, share_CS_input)
@@ -106,8 +109,11 @@ share_CS <- merge(
 # setting those with NA to 0.5 for now
 share_CS[is.na(share_served_by_CS), share_served_by_CS := 0.5]
 
+# making sure its limited to 1
+share_CS[share_served_by_CS >1, share_served_by_CS := share_served_by_CS/100]
 
 
-saveRDS(share_CS[, .(gridcode, share_served_by_CS)], file.path(path_intermediate_res, "share_CS_AUT.rds"))
+
+saveRDS(share_CS[, .(gridcode, share_served_by_CS)], file.path(path_intermediate_res, "share_CS.rds"))
 
 

@@ -1,30 +1,32 @@
 # File that defines data, constants or variables for the analysis and will be run automatically
 # by Bettina Kroyer
 
-already_processed <- FALSE
+already_processed <- TRUE
 datum <- format(Sys.Date(), format="%b%d") # for naming reasons
 ln_A_B <- FALSE # calculating with typo in ln network flow scenario b?
 round_to <- 4 # number of digits to round results to (only applied to final results)
 validation_region <- FALSE
-validation_code <- "I"
-use_default_params <- FALSE # using the default model parameters, and dn 30 for Austria and Germany
+validation_code <- "G"
+use_default_params <- TRUE # using the default model parameters, and dn 30 for Austria and Germany
+
+sensitivity_analysis <- FALSE
 
 
 # Data paths ---------------------------------------------------------------------------------------------------------------------
 
 path_intermediate_res <- file.path("data_NOTREAD", "intermediate_results") # for the results and processed input data
 path_input <- file.path("data")
-#path_raw_nc <- file.path(path_intermediate_res, "nc_raw") # for the precipitation data extraction for settlements
-#path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped") # for the precipitation data extraction for settlements
+path_raw_nc <- file.path(path_intermediate_res, "nc_raw") # for the precipitation data extraction for settlements
+path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped") # for the precipitation data extraction for settlements
 
-path_raw_nc <- file.path(path_intermediate_res, "nc_raw_AUT") # for the precipitation data extraction for settlements for Austria
-path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped_AUT") # for the precipitation data extraction for settlements for Austria
+# path_raw_nc <- file.path(path_intermediate_res, "nc_raw_AUT") # for the precipitation data extraction for settlements for Austria
+# path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped_AUT") # for the precipitation data extraction for settlements for Austria
 
 
 # Time period of interest (Used in precipitation data extraction & mask when applying model) -------------------------------------
 
 date_begin <- "2010-01-01" # 2010-01-01
-date_end <- "2016-12-31" # 2020-12-31
+date_end <- "2016-12-31" # 2016-12-31
 
 
 time_period_of_interest <- "2010_2016" # either "2010_2016" (for data from 2015 in imp and pop) or "2021_2024" (for data from 2021 used in imp and pop)
@@ -38,8 +40,8 @@ nam <- paste(current_years, collapse = "_")
 
 # Area of interest ---------------------------------------------------------------------------------------------------------------
 
-area_of_interest <- "Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp"
-area_of_interest_name <- paste0("AUT_default", nam) #Austria_default_params
+area_of_interest <- file.path(path_intermediate_res, "FUA_vienna", "FUA_vienna.shp")
+area_of_interest_name <- paste0("Vienna_NOTlnerror_", nam) #Austria_default_params
 
 #file.path(path_intermediate_res, "Einzugsgebiet_Traisen", "traisen_reduced.shp")
 #file.path(path_intermediate_res, "Einzugsgebiet_Bad_Leonfelden", "Einzugsgebiet_Bad_Leonfelden.shp")
@@ -77,13 +79,13 @@ if (validation_region){
 
     val_data <- setDT(read.xlsx(file.path(path_intermediate_res, "Validation_data.xlsx"), sheet = 1))
     val_value <- val_data[Code == validation_code, Value]
-    #manual_CS <- FALSE
-    manual_CS <- val_data[Code == validation_code, CS]
+    manual_CS <- FALSE
+    #manual_CS <- val_data[Code == validation_code, CS]
 
     if (time_period_of_interest == "2021_2024"){
-        manual_pop <- val_data[Code == validation_code, Pop2018_2023]
+        manual_pop <- val_data[Code == validation_code, Pop2018_2023] / factor_enlarge_validation
     } else {
-        manual_pop <- val_data[Code == validation_code, Pop_2015]
+        manual_pop <- val_data[Code == validation_code, Pop_2015] / factor_enlarge_validation
     }
 
 }else{
@@ -113,6 +115,13 @@ if (use_default_params){
 } else {
 
     # option to manually change the parameters
+    # k0 <- 0.3
+    # W0 <- 1.5
+    # dn <- 29
+    # dt <- 2
+    # W1 <- 5
+    # W2 <- 1.5
+
     k0 <- 0.3
     W0 <- 1.5
     dn <- 30
@@ -123,8 +132,6 @@ if (use_default_params){
 
 dwf_per_capita <- 0.2
 
-# save gridcodes one by one or summarise over all?
-save_single_files = FALSE # if TRUE, one Excel file is created per gridcode
 
 if (!validation_region){ # for validation regions: Cs share and population from data shared and Emreg
     manual_pop <- FALSE #FALSE#19640#88361 # specify number of connected inhabitants or set to FALSE to use Eurostat population data
@@ -191,7 +198,7 @@ if (!validation_region){
 
 if (use_default_params){
 
-    params <- data.table(gridcode = gridcode_to_process, k0 = k0, W0 = W0, dn = dn, dt = dt, W1 = W1, W2 = W2, dwf_per_capita = dwf_per_capita, key = "gridcode")
+    params <- list(data.table(gridcode = gridcode_to_process, k0 = k0, W0 = W0, dn = dn, dt = dt, W1 = W1, W2 = W2, dwf_per_capita = dwf_per_capita, factor_enlarge_prec = 1, key = "gridcode"))
 
     if (!already_processed){
 
@@ -210,11 +217,45 @@ if (use_default_params){
         gridcodes_in_aut_germ <- readRDS(file.path(path_input, "gridcodes_in_aut_germ.rds"))
     }
 
-    params[gridcode %in% gridcodes_in_aut_germ, dn := 30]
+    params[[1]][gridcode %in% gridcodes_in_aut_germ, dn := 30]
 
 
 } else {
-    params <- data.table(gridcode = gridcode_to_process, k0 = k0, W0 = W0, dn = dn, dt = dt, W1 = W1, W2 = W2, dwf_per_capita = dwf_per_capita, key = "gridcode")
+    if (sensitivity_analysis == TRUE){ # only the default values are used for the sensitivity analysis, but specify manually as dn in AUT/GER difficult
+
+        # specify the varying parameter / data
+        # varying_param <- seq(0.1, 1.9, 0.2) # k0
+        # varying_param <- seq(0.2, 5, 0.4) # W0
+        # varying_param <- seq(3, 30, 1) # dn
+        varying_param <- seq(10,50,10) # prec
+        # varying_param <- seq(2, 20, 1) # dt
+        # varying_param <- seq(0.2, 5, 0.4) # W1
+        # varying_param <- seq(0.2, 9.8, 0.8) # W2
+        #varying_param <- seq(0.15,0.25,0.01) #dwf
+
+        # list instead of single row
+        params <- lapply(varying_param, function(vary_temp) {
+            data.table(
+                gridcode = gridcode_to_process,
+                k0 = k0,
+                W0 = W0,
+                dn = dn,
+                #dn = vary_temp,
+                dt = dt,
+                W1 = W1,
+                W2 = W2,
+                dwf_per_capita = dwf_per_capita,
+                #factor_enlarge_prec = 1,
+                factor_enlarge_prec = vary_temp,
+                key = "gridcode"
+            )
+        })
+
+        area_of_interest_name <- paste0(area_of_interest_name, "_prec_", varying_param)
+
+    } else {
+        params <- list(data.table(gridcode = gridcode_to_process, k0 = k0, W0 = W0, dn = dn, dt = dt, W1 = W1, W2 = W2, dwf_per_capita = dwf_per_capita, factor_enlarge_prec = 1, key = "gridcode"))
+    }
 }
 
 

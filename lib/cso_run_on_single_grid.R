@@ -12,7 +12,8 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
                                         manual_pop = FALSE,
                                         year_temp = year_temp,
                                         save_single_files = FALSE,
-                                        print_params = FALSE) {
+                                        print_params = FALSE,
+                                        ln_A_B = ln_A_B) {
 
     sourceCpp("lib/cso_model_helpers.cpp")
 
@@ -24,8 +25,8 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
     p     <- params[gridcode == gridcode_temp]
 
     if (!manual_pop){
-        pop <- as.integer(pop_dt[settlement_id  == gridcode_temp]$population * share$share_served_by_CS) # the population actually discharging into the combined sewer system!
-        print(pop)
+        pop <- as.numeric(pop_dt[settlement_id  == gridcode_temp]$population * share$share_served_by_CS) # the population actually discharging into the combined sewer system!
+        #print(pop)
     } else{
         pop <- as.numeric(manual_pop)
     }
@@ -41,7 +42,7 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
 
     used_vals <- cbind(
         p,
-        population = as.integer(pop/share$share_served_by_CS),
+        population = as.numeric(pop/share$share_served_by_CS),
         population_connected = pop,
         imp_area_km2 = imp$imp_area_km2,
         share_served_by_CS = share$share_served_by_CS,
@@ -76,8 +77,12 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
         dt = p$dt,
         W1 = p$W1,
         W2 = p$W2,
-        print_params = print_params
+        print_params = print_params,
+        ln_A_B = ln_A_B
     )
+
+    #print("Number of time steps with scenario b:")
+    #print(table(res$scenario))
 
     # Rprof(NULL)
     # summaryRprof("cso_profile.out", lines = "show")
@@ -113,7 +118,7 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
         ))
 
     }else{
-        path_out <- file.path(path_intermediate_res, area_of_interest_name)
+        path_out <- file.path(path_intermediate_res, area_of_interest_name_temp)
 
         single_row_results <-  process_and_plot_results(res, path_out, location = location, used_params = used_vals, save_single_files = save_single_files, gridcode_temp = gridcode_temp)
 

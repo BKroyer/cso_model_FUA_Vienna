@@ -26,11 +26,12 @@ load.project()
 if (!validation_region){
     # Import population data
     if (time_period_of_interest == "2010_2016"){
-        pop_dt <- readRDS(file.path(path_input, "population_2015_AUT.rds"))
+        pop_dt <- readRDS(file.path(path_input, "population_2015.rds"))
+        #pop_dt <- readRDS(file.path(path_input, "population_2015_AUT.rds"))
     }else{
         if(time_period_of_interest == "2021_2024"){
-            #pop_dt <- readRDS(file.path(path_input, "population_2021.rds"))
-            pop_dt <- readRDS(file.path(path_input, "population_2021_AUT.rds"))
+            pop_dt <- readRDS(file.path(path_input, "population_2021.rds"))
+            #pop_dt <- readRDS(file.path(path_input, "population_2021_AUT.rds"))
         }else{
             errorCondition("use either 2010_2016 or 2021_2024 as time_period_of_interest")
         }
@@ -38,7 +39,7 @@ if (!validation_region){
     setDT(pop_dt, key = "settlement_id")
     pop_dt <- pop_dt[.(gridcode_to_process)]
     setkey(pop_dt, settlement_id)
-    pop_dt[, population := as.integer(population)]
+    pop_dt[, population := as.numeric(population)]#as.integer(population)]
     pop_dt[is.na(population), population := 0] # one cropped settlement had NA as population
 
     sum(pop_dt$population)
@@ -46,11 +47,12 @@ if (!validation_region){
 
     # Import impervious area data
     if (time_period_of_interest == "2010_2016"){
-        imp_dt <- readRDS(file.path(path_input, "impervious_area_2015_AUT.rds"))
+        imp_dt <- readRDS(file.path(path_input, "impervious_area_2015.rds"))
+        #imp_dt <- readRDS(file.path(path_input, "impervious_area_2015_AUT.rds"))
     }else{
         if(time_period_of_interest == "2021_2024"){
-            #imp_dt <- readRDS(file.path(path_input, "impervious_area_2021.rds"))
-            imp_dt <- readRDS(file.path(path_input, "impervious_area_2021_AUT.rds"))
+            imp_dt <- readRDS(file.path(path_input, "impervious_area_2021.rds"))
+            #imp_dt <- readRDS(file.path(path_input, "impervious_area_2021_AUT.rds"))
         }else{
             errorCondition("use either 2010_2016 or 2021_2024 as time_period_of_interest")
         }
@@ -62,8 +64,8 @@ if (!validation_region){
 
     # Import share served by CS
     # share_dt <- data.table(gridcode = unique(prec_dt$gridcode), share_served_by_CS = rep(0.28, length(gridcode_to_process)), key = "gridcode")
-    #share_dt <- readRDS(file.path(path_input, "share_CS.rds"))
-    share_dt <- readRDS(file.path(path_input, "share_CS_AUT.rds"))
+    share_dt <- readRDS(file.path(path_input, "share_CS.rds"))
+    #share_dt <- readRDS(file.path(path_input, "share_CS_AUT.rds"))
     setDT(share_dt, key = "gridcode")
     share_dt <- share_dt[.(gridcode_to_process)]
     setkey(share_dt, gridcode)
@@ -92,7 +94,7 @@ if (!validation_region){
     setDT(pop_dt, key = "settlement_id")
     pop_dt <- pop_dt[.(gridcode_to_process)]
     setkey(pop_dt, settlement_id)
-    pop_dt[, population := as.integer(population)]
+    pop_dt[, population := as.numeric(population)]#as.integer(population)]
     pop_dt[is.na(population), population := 0] # one cropped settlement had NA as population
 
     sum(pop_dt$population)
@@ -128,433 +130,405 @@ if (!validation_region){
     }
 }
 
+rm(urb_3035, urb_3035_cropped_to_aoi, urb_4326, aoi_3035, aoi_buffered_epsg4326, aoi_epsg3035)
 
-# testing differences in impervious area
-# tt <- merge(share_dt, imp_dt, by.x = "gridcode", by.y = "settlement_id")
-# tt <- merge(tt, pop_dt, by.x = "gridcode", by.y = "settlement_id")
-# cor(tt$population, tt$imp_area_km2) # 0.997
-# tt$weight <- tt$imp_area_km2 / sum(tt$imp_area_km2)
-# cs_weighted <- sum(tt$share_served_by_CS * tt$weight)
-# 0.58 instead of 0.28 is +107%
-#plot()
+for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, only does one loop run
 
-#print(share_dt)
+    area_of_interest_name_temp <- area_of_interest_name[i]
+    params_temp <- params[[i]]
+    #print(params_temp)
 
-# Import precipitation data just for gridcodes needed
-# one year after the other - for memory reasons, crashes for ~ 7 years of data and above
-# combine_pre_years <- function(current_years) {
-#
-#     files <- file.path(
-#         path_intermediate_res,
-#         paste0("precipitation_ts_settlements_", current_years, ".rds")
-#     )
-#
-#     dt_list <- vector("list", length(files))
-#
-#     for (i in seq_along(files)) {
-#         dt_list[[i]] <- readRDS(files[i])
-#     }
-#
-#     gc()
-#
-#     combined_temp <- data.table::rbindlist(dt_list, use.names = TRUE)
-#     data.table::setkey(combined_temp, gridcode, time)
-#
-#     rm(dt_list)
-#     gc()
-#
-#     return(combined_temp)
-# }
-#
-# file_path <- file.path(
-#     path_intermediate_res,
-#     paste0("precipitation_ts_settlements_", nam, ".rds")
-# )
-#
-# prec_dt <- if (file.exists(file_path)) { # combined data may exists for some time periods already, e.g. 2010 to 2016 (too large for memory though)
-#     readRDS(file_path)
-# } else {
-#     combine_pre_years(current_years)
-# }
+    # create Workbook with all sheets
+    wb <- createWorkbook()
+
+    widths_temp <- 23
+    cols_temp <- 20
+
+    sheet_params <- "used_params"
+    addWorksheet(wb, sheet_params)
+
+    sheet_results <- "results_per_gridcode"
+    addWorksheet(wb, sheet_results)
+
+    sheet_overflow_yearly <- "overflow_yearly"
+    addWorksheet(wb, sheet_overflow_yearly)
+
+    sheet_overflow <- "overflow_annual_mean"
+    addWorksheet(wb, sheet_overflow)
+
+    sheet_events_metrics_yearly <- "event_metrics_yearly"
+    addWorksheet(wb, sheet_events_metrics_yearly)
+
+    sheet_events_metrics <- "event_metrics_annual_mean"
+    addWorksheet(wb, sheet_events_metrics)
+
+    # fill workbook for all years
+
+    # read validation_einzugsgebiete if validation_region!!!
+
+    summary_overflow_all_years <- NULL
+
+    for (year_temp in current_years){
 
 
-
-
-# create Workbook with all sheets
-wb <- createWorkbook()
-
-widths_temp <- 23
-cols_temp <- 20
-
-sheet_params <- "used_params"
-addWorksheet(wb, sheet_params)
-
-sheet_results <- "results_per_gridcode"
-addWorksheet(wb, sheet_results)
-
-sheet_overflow_yearly <- "overflow_yearly"
-addWorksheet(wb, sheet_overflow_yearly)
-
-sheet_overflow <- "overflow_annual_mean"
-addWorksheet(wb, sheet_overflow)
-
-sheet_events_metrics_yearly <- "event_metrics_yearly"
-addWorksheet(wb, sheet_events_metrics_yearly)
-
-sheet_events_metrics <- "event_metrics_annual_mean"
-addWorksheet(wb, sheet_events_metrics)
-
-#year_temp<-2010
-# fill workbook for all years
-
-# read validation_einzugsgebiete if validation_region!!!
-
-summary_overflow_all_years <- NULL
-
-for (year_temp in current_years){
-
-
-    if (validation_region){
-        file_path <- file.path(
-            path_input,
-            paste0("precipitation_ts_validation_einzugsgebiete_", year_temp, ".rds")
-        )
-    } else {
-        file_path <- file.path(
-            path_input,
-            #paste0("precipitation_ts_settlements_", year_temp, ".rds")
-            paste0("precipitation_ts_AUT_", year_temp, ".rds")
-        )
-    }
-
-
-
-
-    if (file.exists(file_path)){
-        prec_dt_year <- readRDS(file_path)
-    }else{
-        errorCondition(paste0("RDS data for precipitation for year ",year_temp," not found in specified path."))
-    }
-
-    setkey(prec_dt_year, gridcode, time)
-    prec_dt_year <- prec_dt_year[
-        data.table(gridcode = unique(gridcode_to_process)),
-        on = .(gridcode)
-    ]#[time >= date_begin & time <= date_end] #option to filter by time again, only relevant if not entire years are used
-
-    prec_dt_year$time <- as.POSIXct( # fix the time format (CET/CEST because of summer time, but I need the physical time)
-        format(prec_dt_year$time, "%Y-%m-%d %H:%M:%S"),
-        tz = "Etc/GMT-1"
-    )
-
-
-    print(paste0("The mean annual prec (year ",year_temp,") is: ", sum(prec_dt_year$precipitation_mm)/(length(prec_dt_year$time)/8/365), " mm"))
-
-
-    # apply cso_model to gridcodes_to_process (real data) ---------------------------------------------------------------------------------------
-
-    plan(multisession, workers = availableCores() - 1)
-
-    # run if future crashed
-    # plan(sequential)
-    # gc()
-
-
-    mod_results <- future_map(
-        gridcode_to_process,
-        run_cso_for_single_gridcode,
-        params = params,
-        pop_dt = pop_dt,
-        imp_dt = imp_dt,
-        share_dt = share_dt,
-        manual_pop = manual_pop,
-        prec_dt = prec_dt_year,
-        year_temp = year_temp,
-        save_single_files = save_single_files,
-        print_params = FALSE,
-        .options = furrr_options(seed = 123)
-    )
-
-    rm(prec_dt_year)
-
-    runtime_dt <- rbindlist(lapply(mod_results, function(x) data.table(gridcode = x$gridcode, runtime_secs = x$runtime_secs)))
-
-
-    if (save_single_files){
-        walk(mod_results, function(res) {
-            wb_path <- res$workbook_path$wb        # the workbook object
-            path_temp <- res$workbook_path$path_out  # the path
-
-            sheet_name <- names(wb_path)[1]
-            gc <- sub("CSnew_params_", "", sheet_name)
-
-            saveWorkbook(
-                wb_path,
-                file.path(path_temp, paste0("cso_summaries_", gc, ".xlsx")),
-                overwrite = TRUE
+        if (validation_region){
+            file_path <- file.path(
+                path_input,
+                paste0("precipitation_ts_validation_einzugsgebiete_", year_temp, ".rds")
             )
-        })
-    }else{
-
-        # dt_results and dt_events need separate saving else memory error when processing AoI
-
-        # parameters ---------------------------------------------------
-        dt_params <- rbindlist(
-            lapply(mod_results, function(x) x$single_params),
-            use.names = TRUE,
-            fill = TRUE
-        )
-
-        if (year_temp == current_years[1]){
-            writeData(wb, sheet_params, dt_params)
-            setColWidths(wb, sheet_params, cols = 1:cols_temp, widths = widths_temp)
-        }
-
-        prec_sum <- sum(dt_params$mean_annual_prec * (dt_params$imp_area_km2 / sum(dt_params$imp_area_km2, na.rm=T)), na.rm = T)
-
-        rm(dt_params)
-        gc()
-
-
-        # main results (prec, overflow, pop) ---------------------------
-        dt_results <- rbindlist(
-            lapply(mod_results, function(x) x$single_row),
-            use.names = TRUE,
-            fill = TRUE
-        )
-
-        full_area <- dt_results[, sum(imp_area_served_by_CS_km2, na.rm=T)]
-
-        summarized_stats <- as.data.table(t(colSums(dt_results[,-c("year", "gridcode")], na.rm = TRUE)), keep.rownames = TRUE)
-
-        summary_overflow <- data.table(
-            metric = c("total population (connected)", "total impervious area served by CS [km²]", "total annual precipitation [mm]",
-                       "network [mm]", "tank [mm]", "total [mm]", "total [Mm3y]", "DWF volume [mm]", "DWF volume [Mm3]"),
-            model = round(c(summarized_stats$population_connected,
-                            summarized_stats$imp_area_served_by_CS_km2,
-                            prec_sum,
-                            summarized_stats$annual_mean_network_mm,
-                            summarized_stats$annual_mean_tank_mm,
-                            summarized_stats$total_overflow_mm,
-                            summarized_stats$total_overflow_Mm3y,
-                            summarized_stats$DWF_volume_mm,
-                            summarized_stats$DWF_volume_Mm3), round_to),
-            validation = c(NA, round(c(summarized_stats$validation_area,
-                                       NA, # this is the groundtruth precipitation that led to the event, we do not know this
-                                       summarized_stats$annual_mean_network_orig,
-                                       summarized_stats$annual_mean_tank_orig,
-                                       summarized_stats$total_overflow_orig,
-                                       summarized_stats$total_overflow_Mm3y_orig,
-                                       NA,
-                                       NA), round_to))
-        )
-
-        summary_overflow <- cbind(data.table(year = year_temp), summary_overflow)
-        summary_overflow_all_years <- rbind(summary_overflow_all_years, summary_overflow)
-
-
-        if (year_temp == current_years[1]){
-
-            cols_to_round <- c(3, 5:13)
-            dt_results[, (cols_to_round) := lapply(.SD, round, digits = round_to),
-                       .SDcols = cols_to_round]
-            writeData(wb, sheet_results, dt_results)
-            setColWidths(wb, sheet_results, cols = 1:cols_temp, widths = widths_temp)
-
-
-            summary_overflow_per_year <- summary_overflow[which(summary_overflow$metric == "total annual precipitation [mm]"):which(summary_overflow$metric == "DWF volume [Mm3]"), ]
-            writeData(wb, sheet_overflow_yearly, summary_overflow_per_year)
-            setColWidths(wb, sheet_overflow_yearly, cols = 1:cols_temp, widths = 35)
-
-
         } else {
-
-            cols_to_round <- c(3, 5:13)
-            dt_results[, (cols_to_round) := lapply(.SD, round, digits = round_to),
-                       .SDcols = cols_to_round]
-            startrow <- 2 + (which(year_temp == current_years)-1) * (nrow(dt_results))
-            writeData(wb, sheet_results, dt_results, startRow = startrow, colNames = FALSE)
-            setColWidths(wb, sheet_results, cols = 1:cols_temp, widths = widths_temp)
-
-
-            summary_overflow_per_year <- summary_overflow[which(summary_overflow$metric == "total annual precipitation [mm]"):which(summary_overflow$metric == "DWF volume [Mm3]"), ]
-            startrow <- 2 + (which(year_temp == current_years)-1) * (nrow(summary_overflow_per_year))
-            writeData(wb, sheet_overflow_yearly, summary_overflow_per_year, startRow = startrow, colNames = FALSE)
-            setColWidths(wb, sheet_overflow_yearly, cols = 1:cols_temp, widths = 35)
+            file_path <- file.path(
+                path_input,
+                paste0("precipitation_ts_settlements_", year_temp, ".rds")
+                #paste0("precipitation_ts_AUT_", year_temp, ".rds")
+            )
         }
 
 
-        if (year_temp == current_years[length(current_years)]){ # only needed once when all results are in
 
-            # keep the two specific metrics (one value per year)
-            part1 <- unique(summary_overflow_all_years[
-                metric %in% c("total population", "total impervious area served by CS [km²]"),
-                .(metric = metric, annual_means = model)
-            ])
 
-            # compute mean(model) for the range of metrics between the two names
-            i1 <- match("total annual precipitation [mm]", summary_overflow_all_years$metric)
-            i2 <- match("DWF volume [Mm3]", summary_overflow_all_years$metric)
-
-            block_metrics <- unique(summary_overflow_all_years[min(i1,i2):max(i1,i2), metric])
-
-            part2 <- summary_overflow_all_years[
-                metric %in% block_metrics,
-                .(annual_means = mean(model, na.rm = TRUE)),
-                by = metric
-            ]
-
-            summary_overflow_means <- rbind(part1, part2)
-
-            # summary_overflow_means <- rbind(
-            #     summary_overflow_all_years[metric %in% c("total population", "total impervious area served by CS [km²]"), .(metric = metric, annual_means = model)],
-            #     summary_overflow_all_years[which(summary_overflow_all_years$metric == "total annual precipitation [mm]"):which(summary_overflow_all_years$metric == "DWF volume [Mm3]"), .(annual_means = mean(model, na.rm=T)), by = metric]
-            # )
-
-            summary_overflow_means[, annual_means_scaled := annual_means * factor_enlarge_validation]
-
-            #print(summary_overflow_means)
-
-            writeData(wb, sheet_overflow, summary_overflow_means)
-            setColWidths(wb, sheet_overflow, cols = 1:cols_temp, widths = 35)
-
+        if (file.exists(file_path)){
+            prec_dt_year <- readRDS(file_path)
+        }else{
+            errorCondition(paste0("RDS data for precipitation for year ",year_temp," not found in specified path."))
         }
 
-        print(paste0("The total overflow is ", summarized_stats$total_overflow_Mm3y, " Mm³"))
-        # print(runtime_dt)
+        setkey(prec_dt_year, gridcode, time)
+        prec_dt_year <- prec_dt_year[
+            data.table(gridcode = unique(gridcode_to_process)),
+            on = .(gridcode)
+        ]#[time >= date_begin & time <= date_end] #option to filter by time again, only relevant if not entire years are used
 
-        rm(dt_results) # free memory
-        gc()
-
-
-
-        # event stats ---------------------------------------------------
-        dt_event <- rbindlist(
-            lapply(mod_results, `[[`, "event_res"),
-            use.names = TRUE,
-            fill = TRUE
+        prec_dt_year$time <- as.POSIXct( # fix the time format (CET/CEST because of summer time, but I need the physical time)
+            format(prec_dt_year$time, "%Y-%m-%d %H:%M:%S"),
+            tz = "Etc/GMT-1"
         )
 
-        rm(mod_results)
+        prec_dt_year$precipitation_mm <- prec_dt_year$precipitation_mm * params_temp$factor_enlarge_prec
 
-        rain_area <- dt_event[, .(rain_event = any(rain_event),
-                                  overflow_event = any(overflow_duration_h > 0),
-                                  rain_volume = sum(precipitation_m3, na.rm=T),
-                                  overflow_volume = sum(total_overflow_m3, na.rm=T)),
-                              by = time][order(time)]
-
-        rain_area <- rain_area[, `:=` (rain_end = fifelse(rain_event != 0 & data.table::shift(rain_event, type = "lead", fill = 0) == 0, 1L, 0L),
-                      overflow_end =  fifelse(overflow_event != 0 & data.table::shift(overflow_event, type = "lead", fill = 0) == 0, 1L, 0L),
-                      rain_duration = rain_event * min(diff(time)),
-                      overflow_duration = overflow_event * min(diff(time))
-                      )]
-
-        rain_area<- rain_area[rain_end == 1, rain_event_id := seq_along(rain_end)]
-        rain_area<- rain_area[overflow_end == 1, overflow_event_id := seq_along(overflow_end)]
-
-        event_metrics <- rain_area[, .(
-            nr_of_rain_events = sum(rain_end, na.rm=T),
-            mean_rain_duration_per_event = sum(rain_duration, na.rm=T)/max(rain_event_id, na.rm=T),
-            mean_rain_volume_per_event_mm = sum(rain_volume, na.rm=T)/max(rain_event_id, na.rm=T)/full_area/1000,
-
-            nr_of_overflow_events = sum(overflow_end, na.rm=T),
-            mean_overflow_duration_per_event = sum(overflow_duration, na.rm=T)/max(overflow_event_id, na.rm=T),
-            mean_overflow_volume_per_event_mm = sum(overflow_volume, na.rm=T)/max(overflow_event_id, na.rm=T)/full_area/1000,
-            mean_overflow_volume_per_event_m3 = sum(overflow_volume, na.rm=T)/max(overflow_event_id, na.rm=T),
-            mean_overflow_volume_per_rain_event_m3 =  sum(overflow_volume, na.rm=T)/max(rain_event_id, na.rm=T)
-        )]
-
-        event_metrics <- cbind(data.table(year = year_temp), event_metrics)
-
-
-        if (year_temp == current_years[1]){ # only needed once
-
-            cols_to_round <- c(3, 5:13)
-
-            event_metrics[, c(3:4,6:8) := lapply(.SD, round, digits = round_to),
-                          .SDcols =  c(3:4,6:8)]
-            writeData(wb, sheet_events_metrics_yearly, event_metrics)
-            setColWidths(wb, sheet_events_metrics_yearly, cols = 1:cols_temp, widths = 35)
-
-            event_metrics_rows <- event_metrics
-
-
-        } else {
-
-            cols_to_round <- c(3, 5:13)
-
-            event_metrics[, c(3:4,6:8) := lapply(.SD, round, digits = round_to),
-                          .SDcols =  c(3:4,6:8)]
-            startrow <- 2 + (which(year_temp == current_years)-1) * (nrow(event_metrics))
-            writeData(wb, sheet_events_metrics_yearly, event_metrics, startRow = startrow, colNames = FALSE)
-            setColWidths(wb, sheet_events_metrics_yearly, cols = 1:cols_temp, widths = 35)
-
-            event_metrics_rows <- rbind(event_metrics_rows, event_metrics)
-        }
-
-
-        if (year_temp == current_years[length(current_years)]){ # only needed once when all results are in
-
-
-            event_metrics_means_numbers <- event_metrics_rows[, lapply(.SD, function(x) {
-                if (inherits(x, "difftime")) {
-                    mean(as.numeric(x), na.rm = TRUE)
-                } else {
-                    mean(x, na.rm = TRUE)
-                }
-            }),
-            .SDcols = c("nr_of_rain_events", "nr_of_overflow_events")]
-
-
-            event_metrics_means_weighted_by_rain_event <- event_metrics_rows[, lapply(.SD, function(x) {
-                if (inherits(x, "difftime")) {
-                    sum(as.numeric(x) * nr_of_rain_events, na.rm=T)/sum(nr_of_rain_events, na.rm=T)
-                } else {
-                    sum(x * nr_of_rain_events, na.rm = TRUE)/sum(nr_of_rain_events, na.rm=T)
-                }
-            }),
-            .SDcols = c("mean_rain_duration_per_event", "mean_rain_volume_per_event_mm", "mean_overflow_volume_per_rain_event_m3")]
-
-
-            event_metrics_means_weighted_by_overflow_event <- event_metrics_rows[, lapply(.SD, function(x) {
-                if (inherits(x, "difftime")) {
-                    sum(as.numeric(x) * nr_of_overflow_events, na.rm=T)/sum(nr_of_overflow_events, na.rm=T)
-                } else {
-                    sum(x * nr_of_overflow_events, na.rm = TRUE)/sum(nr_of_overflow_events, na.rm=T)
-                }
-            }),
-            .SDcols = c("mean_overflow_duration_per_event", "mean_overflow_volume_per_event_mm", "mean_overflow_volume_per_event_m3")]
-
-
-            event_metrics_means <- cbind(event_metrics_means_numbers, event_metrics_means_weighted_by_rain_event, event_metrics_means_weighted_by_overflow_event)
-
-            event_metrics_means[, c(3:8) := lapply(.SD, round, digits = round_to),
-                       .SDcols = c(3:8)]
-
-            writeData(wb, sheet_events_metrics, event_metrics_means)
-            setColWidths(wb, sheet_events_metrics, cols = 1:cols_temp, widths = widths_temp)
-
-        }
-
-        rm(dt_event) # free memory
+        print(paste0("The mean annual prec (year ",year_temp,") is: ", sum(prec_dt_year$precipitation_mm)/(length(prec_dt_year$time)/8/365), " mm"))
         gc()
 
+        # apply cso_model to gridcodes_to_process (real data) ---------------------------------------------------------------------------------------
 
+        plan(multisession, workers = availableCores() - 4)
+
+        # run if future crashed
+        # plan(sequential)
+        # gc()
+
+
+        mod_results <- future_map(
+            gridcode_to_process,
+            run_cso_for_single_gridcode,
+            params = params_temp[, 1:8], # no factor_enlarge_prec used in the model, would be 9th
+            pop_dt = pop_dt,
+            imp_dt = imp_dt,
+            share_dt = share_dt,
+            manual_pop = manual_pop,
+            prec_dt = prec_dt_year,
+            year_temp = year_temp,
+            save_single_files = save_single_files,
+            print_params = FALSE,
+            ln_A_B = ln_A_B,
+            .options = furrr_options(seed = 123)
+        )
+
+        rm(prec_dt_year)
+
+        #runtime_dt <- rbindlist(lapply(mod_results, function(x) data.table(gridcode = x$gridcode, runtime_secs = x$runtime_secs)))
+
+        #options(warn=2)
+
+        if (save_single_files){
+            walk(mod_results, function(res) {
+                wb_path <- res$workbook_path$wb        # the workbook object
+                path_temp <- res$workbook_path$path_out  # the path
+
+                sheet_name <- names(wb_path)[1]
+                gc <- sub("CSnew_params_", "", sheet_name)
+
+                saveWorkbook(
+                    wb_path,
+                    file.path(path_temp, paste0("cso_summaries_", gc, ".xlsx")),
+                    overwrite = TRUE
+                )
+            })
+        }else{
+
+            # dt_results and dt_events need separate saving else memory error when processing AoI
+
+            # parameters ---------------------------------------------------
+            dt_params <- rbindlist(
+                lapply(mod_results, function(x) x$single_params),
+                use.names = TRUE,
+                fill = TRUE
+            )
+
+            if (year_temp == current_years[1]){
+                writeData(wb, sheet_params, dt_params)
+                setColWidths(wb, sheet_params, cols = 1:cols_temp, widths = widths_temp)
+            }
+
+            prec_sum <- sum(dt_params$mean_annual_prec * (dt_params$imp_area_km2 / sum(dt_params$imp_area_km2, na.rm=T)), na.rm = T)
+
+            rm(dt_params)
+            gc()
+
+
+            # main results (prec, overflow, pop) ---------------------------
+            dt_results <- rbindlist(
+                lapply(mod_results, function(x) x$single_row),
+                use.names = TRUE,
+                fill = TRUE
+            )
+
+            full_area <- dt_results[, sum(imp_area_served_by_CS_km2, na.rm=T)]
+
+            # weighted annual mean depths (mm) per dataset column
+            dt_results[, `:=`(
+                annual_mean_tank_mm = annual_mean_tank_mm * (imp_area_served_by_CS_km2/full_area),
+                annual_mean_network_mm = annual_mean_network_mm * (imp_area_served_by_CS_km2/full_area),
+                DWF_volume_mm = DWF_volume_mm * (imp_area_served_by_CS_km2/full_area)
+            )]
+
+            summarized_stats <- as.data.table(t(colSums(dt_results[,-c("year", "gridcode")], na.rm = TRUE)), keep.rownames = TRUE)
+            summarized_stats[, total_overflow_mm := sum(annual_mean_tank_mm, annual_mean_network_mm)]
+
+            summary_overflow <- data.table(
+                metric = c("total impervious area served by CS [km²]", "total annual precipitation [mm]", #"total population (connected)",
+                           "network [mm]", "tank [mm]", "total [mm]", "total [Mm3y]", "DWF volume [mm]", "DWF volume [Mm3]"),
+                model = round(c(#summarized_stats$population_connected,
+                    summarized_stats$imp_area_served_by_CS_km2,
+                    prec_sum,
+                    summarized_stats$annual_mean_network_mm,
+                    summarized_stats$annual_mean_tank_mm,
+                    summarized_stats$total_overflow_mm,
+                    summarized_stats$total_overflow_Mm3y,
+                    summarized_stats$DWF_volume_mm,
+                    summarized_stats$DWF_volume_Mm3), round_to),
+                validation = c(round(c(summarized_stats$validation_area,
+                                           NA, # this is the groundtruth precipitation that led to the event, we do not know this
+                                           summarized_stats$annual_mean_network_orig,
+                                           summarized_stats$annual_mean_tank_orig,
+                                           summarized_stats$total_overflow_orig,
+                                           summarized_stats$total_overflow_Mm3y_orig,
+                                           NA,
+                                           NA), round_to))
+            )
+
+            summary_overflow <- cbind(data.table(year = year_temp), summary_overflow)
+            summary_overflow_all_years <- rbind(summary_overflow_all_years, summary_overflow)
+
+
+            if (year_temp == current_years[1]){
+
+                cols_to_round <- c(3, 5:13)
+                dt_results[, (cols_to_round) := lapply(.SD, round, digits = round_to),
+                           .SDcols = cols_to_round]
+                writeData(wb, sheet_results, dt_results)
+                setColWidths(wb, sheet_results, cols = 1:cols_temp, widths = widths_temp)
+
+
+                summary_overflow_per_year <- summary_overflow[which(summary_overflow$metric == "total annual precipitation [mm]"):which(summary_overflow$metric == "DWF volume [Mm3]"), ]
+                writeData(wb, sheet_overflow_yearly, summary_overflow_per_year)
+                setColWidths(wb, sheet_overflow_yearly, cols = 1:cols_temp, widths = 35)
+
+
+            } else {
+
+                cols_to_round <- c(3, 5:13)
+                dt_results[, (cols_to_round) := lapply(.SD, round, digits = round_to),
+                           .SDcols = cols_to_round]
+                startrow <- 2 + (which(year_temp == current_years)-1) * (nrow(dt_results))
+                writeData(wb, sheet_results, dt_results, startRow = startrow, colNames = FALSE)
+                setColWidths(wb, sheet_results, cols = 1:cols_temp, widths = widths_temp)
+
+
+                summary_overflow_per_year <- summary_overflow[which(summary_overflow$metric == "total annual precipitation [mm]"):which(summary_overflow$metric == "DWF volume [Mm3]"), ]
+                startrow <- 2 + (which(year_temp == current_years)-1) * (nrow(summary_overflow_per_year))
+                writeData(wb, sheet_overflow_yearly, summary_overflow_per_year, startRow = startrow, colNames = FALSE)
+                setColWidths(wb, sheet_overflow_yearly, cols = 1:cols_temp, widths = 35)
+            }
+
+
+            if (year_temp == current_years[length(current_years)]){ # only needed once when all results are in
+
+                # keep the two specific metrics (one value per year)
+                part1 <- unique(summary_overflow_all_years[
+                    metric %in% c("total population", "total impervious area served by CS [km²]"),
+                    .(metric = metric, annual_means = model)
+                ])
+
+                # compute mean(model) for the range of metrics between the two names
+                i1 <- match("total annual precipitation [mm]", summary_overflow_all_years$metric)
+                i2 <- match("DWF volume [Mm3]", summary_overflow_all_years$metric)
+
+                block_metrics <- unique(summary_overflow_all_years[min(i1,i2):max(i1,i2), metric])
+
+                part2 <- summary_overflow_all_years[
+                    metric %in% block_metrics,
+                    .(annual_means = mean(model, na.rm = TRUE)),
+                    by = metric
+                ]
+
+                summary_overflow_means <- rbind(part1, part2)
+
+                # summary_overflow_means <- rbind(
+                #     summary_overflow_all_years[metric %in% c("total population", "total impervious area served by CS [km²]"), .(metric = metric, annual_means = model)],
+                #     summary_overflow_all_years[which(summary_overflow_all_years$metric == "total annual precipitation [mm]"):which(summary_overflow_all_years$metric == "DWF volume [Mm3]"), .(annual_means = mean(model, na.rm=T)), by = metric]
+                # )
+
+                summary_overflow_means[, annual_means_scaled := annual_means * factor_enlarge_validation]
+
+                #print(summary_overflow_means)
+
+                writeData(wb, sheet_overflow, summary_overflow_means)
+                setColWidths(wb, sheet_overflow, cols = 1:cols_temp, widths = 35)
+
+            }
+
+            print(paste0("The total overflow is ", summarized_stats$total_overflow_Mm3y, " Mm³"))
+            # print(runtime_dt)
+
+            rm(dt_results) # free memory
+            gc()
+
+
+
+            # event stats ---------------------------------------------------
+            dt_event <- rbindlist(
+                lapply(mod_results, `[[`, "event_res"),
+                use.names = TRUE,
+                fill = TRUE
+            )
+
+            rm(mod_results)
+
+            rain_area <- dt_event[, .(rain_event = any(rain_event),
+                                      overflow_event = any(overflow_duration_h > 0),
+                                      rain_volume = sum(precipitation_m3, na.rm=T),
+                                      overflow_volume = sum(total_overflow_m3, na.rm=T)),
+                                  by = time][order(time)]
+
+            rain_area <- rain_area[, `:=` (rain_end = fifelse(rain_event != 0 & data.table::shift(rain_event, type = "lead", fill = 0) == 0, 1L, 0L),
+                                           overflow_end =  fifelse(overflow_event != 0 & data.table::shift(overflow_event, type = "lead", fill = 0) == 0, 1L, 0L),
+                                           rain_duration = rain_event * min(diff(time)),
+                                           overflow_duration = overflow_event * min(diff(time))
+            )]
+
+            rain_area<- rain_area[rain_end == 1, rain_event_id := seq_along(rain_end)]
+            rain_area<- rain_area[overflow_end == 1, overflow_event_id := seq_along(overflow_end)]
+
+            event_metrics <- rain_area[, .(
+                nr_of_rain_events = sum(rain_end, na.rm=T),
+                mean_rain_duration_per_event = sum(rain_duration, na.rm=T)/max(rain_event_id, na.rm=T),
+                mean_rain_volume_per_event_mm = sum(rain_volume, na.rm=T)/max(rain_event_id, na.rm=T)/full_area/1000,
+
+                nr_of_overflow_events = sum(overflow_end, na.rm=T),
+                mean_overflow_duration_per_event = sum(overflow_duration, na.rm=T)/max(overflow_event_id, na.rm=T),
+                mean_overflow_volume_per_event_mm = sum(overflow_volume, na.rm=T)/max(overflow_event_id, na.rm=T)/full_area/1000,
+                mean_overflow_volume_per_event_m3 = sum(overflow_volume, na.rm=T)/max(overflow_event_id, na.rm=T),
+                mean_overflow_volume_per_rain_event_m3 =  sum(overflow_volume, na.rm=T)/max(rain_event_id, na.rm=T)
+            )]
+
+            event_metrics <- cbind(data.table(year = year_temp), event_metrics)
+
+
+            if (year_temp == current_years[1]){ # only needed once
+
+                cols_to_round <- c(3, 5:13)
+
+                event_metrics[, c(3:4,6:8) := lapply(.SD, round, digits = round_to),
+                              .SDcols =  c(3:4,6:8)]
+                writeData(wb, sheet_events_metrics_yearly, event_metrics)
+                setColWidths(wb, sheet_events_metrics_yearly, cols = 1:cols_temp, widths = 35)
+
+                event_metrics_rows <- event_metrics
+
+
+            } else {
+
+                cols_to_round <- c(3, 5:13)
+
+                event_metrics[, c(3:4,6:8) := lapply(.SD, round, digits = round_to),
+                              .SDcols =  c(3:4,6:8)]
+                startrow <- 2 + (which(year_temp == current_years)-1) * (nrow(event_metrics))
+                writeData(wb, sheet_events_metrics_yearly, event_metrics, startRow = startrow, colNames = FALSE)
+                setColWidths(wb, sheet_events_metrics_yearly, cols = 1:cols_temp, widths = 35)
+
+                event_metrics_rows <- rbind(event_metrics_rows, event_metrics)
+            }
+
+
+            if (year_temp == current_years[length(current_years)]){ # only needed once when all results are in
+
+
+                event_metrics_means_numbers <- event_metrics_rows[, lapply(.SD, function(x) {
+                    if (inherits(x, "difftime")) {
+                        mean(as.numeric(x), na.rm = TRUE)
+                    } else {
+                        mean(x, na.rm = TRUE)
+                    }
+                }),
+                .SDcols = c("nr_of_rain_events", "nr_of_overflow_events")]
+
+
+                event_metrics_means_weighted_by_rain_event <- event_metrics_rows[, lapply(.SD, function(x) {
+                    if (inherits(x, "difftime")) {
+                        sum(as.numeric(x) * nr_of_rain_events, na.rm=T)/sum(nr_of_rain_events, na.rm=T)
+                    } else {
+                        sum(x * nr_of_rain_events, na.rm = TRUE)/sum(nr_of_rain_events, na.rm=T)
+                    }
+                }),
+                .SDcols = c("mean_rain_duration_per_event", "mean_rain_volume_per_event_mm", "mean_overflow_volume_per_rain_event_m3")]
+
+
+                event_metrics_means_weighted_by_overflow_event <- event_metrics_rows[, lapply(.SD, function(x) {
+                    if (inherits(x, "difftime")) {
+                        sum(as.numeric(x) * nr_of_overflow_events, na.rm=T)/sum(nr_of_overflow_events, na.rm=T)
+                    } else {
+                        sum(x * nr_of_overflow_events, na.rm = TRUE)/sum(nr_of_overflow_events, na.rm=T)
+                    }
+                }),
+                .SDcols = c("mean_overflow_duration_per_event", "mean_overflow_volume_per_event_mm", "mean_overflow_volume_per_event_m3")]
+
+
+                event_metrics_means <- cbind(event_metrics_means_numbers, event_metrics_means_weighted_by_rain_event, event_metrics_means_weighted_by_overflow_event)
+
+                event_metrics_means[, c(3:8) := lapply(.SD, round, digits = round_to),
+                                    .SDcols = c(3:8)]
+
+                writeData(wb, sheet_events_metrics, event_metrics_means)
+                setColWidths(wb, sheet_events_metrics, cols = 1:cols_temp, widths = widths_temp)
+
+            }
+
+            rm(dt_event) # free memory
+            gc()
+
+
+
+        }
+
+        if (length(gridcode_to_process) > 2 | validation_region == TRUE){
+            results_nam <- paste0(area_of_interest_name_temp, paste0("_", datum), ".xlsx")
+
+        }else{
+            results_nam <- paste0(paste(gridcode_to_process, collapse = "_"), paste0("_", datum), ".xlsx")
+
+        }
+
+        path_out <- file.path(path_intermediate_res, results_nam)
+        saveWorkbook(wb, path_out, overwrite = TRUE)
 
     }
 
-    if (length(gridcode_to_process) > 2 | validation_region == TRUE){
-        results_nam <- paste0(area_of_interest_name, paste0("_", datum), ".xlsx")
-
-    }else{
-        results_nam <- paste0(paste(gridcode_to_process, collapse = "_"), paste0("_", datum), ".xlsx")
-
-    }
-
-    path_out <- file.path(path_intermediate_res, results_nam)
-    saveWorkbook(wb, path_out, overwrite = TRUE)
 
 }
+
+
+
 
 
 

@@ -63,9 +63,9 @@ process_and_plot_results <- function(mod_res, path_out, used_params, validation_
     # create the folder
     # path_out <- normalizePath(path_out, mustWork = FALSE)
 
-    if (!dir.exists(path_out)){
-        dir.create(path_out, recursive = TRUE, showWarnings = FALSE)
-    }
+    #if (!dir.exists(path_out)){
+    #    dir.create(path_out, recursive = TRUE, showWarnings = FALSE)
+    #}
 
 
     has_validation <- !is.null(validation_data)
@@ -202,7 +202,7 @@ process_and_plot_results <- function(mod_res, path_out, used_params, validation_
     if (save_single_files == TRUE){
         cat("\n--- CSO summary ---\n")
         cat("CSO duration (mean): ",
-            round(overflow_duration, round_to), " hrs/year\n")
+            round(overflow_duration_h, round_to), " hrs/year\n")
 
         cat("CSO volume per event: ",
             round(cso_volume_per_event, round_to), " mm/event\n\n")
@@ -316,7 +316,6 @@ process_and_plot_results <- function(mod_res, path_out, used_params, validation_
             # gridcode = is added later
             #prec_area_weighted_sum = prec_sum,
             imp_area_served_by_CS_km2 = area,
-            population_connected = population,
             annual_mean_tank_mm = annual_mean_tank, #mm
             annual_mean_network_mm = annual_mean_network, #mm
             total_overflow_mm = total_overflow, #mm

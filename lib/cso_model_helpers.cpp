@@ -156,7 +156,7 @@ List virtual_volume_and_tank_volume_cpp(
         else if (scenario[t] == 3) tv_new = vc[t];
         else                       tv_new = vd[t];
 
-        tv[t] = std::min(tv_new, W2);
+        tv[t] = tv[t] = std::max(0.0, std::min(tv_new, W2));
     }
 
     return List::create(

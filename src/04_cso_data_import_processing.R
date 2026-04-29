@@ -12,7 +12,7 @@ load.project()
 ##################################################################
 # CSO Data Import and Processing                                 #
 # Purpose:                                                       #
-# 1. Import precipitation and FUA data, prepare and clean data   #
+# 1. Import all input data for the settlements                   #
 # 2. Calculate CSO (Combined Sewer Overflow) metrics             #
 # 3. Export results for each file                                #
 ##################################################################
@@ -211,7 +211,7 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
 
         # apply cso_model to gridcodes_to_process (real data) ---------------------------------------------------------------------------------------
 
-        plan(multisession, workers = availableCores() - 4)
+        plan(multisession, workers = availableCores() - 2)
 
         # run if future crashed
         # plan(sequential)
@@ -491,11 +491,10 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
 
         }
 
-        path_out <- file.path(path_intermediate_res, results_nam)
-        saveWorkbook(wb, path_out, overwrite = TRUE)
-
     }
 
+    path_out <- file.path(path_intermediate_res, results_nam)
+    saveWorkbook(wb, path_out, overwrite = TRUE)
 
 }
 

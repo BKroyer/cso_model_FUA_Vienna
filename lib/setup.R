@@ -7,7 +7,7 @@ ln_A_B <- FALSE # calculating with typo in ln network flow scenario b?
 round_to <- 4 # number of digits to round results to (only applied to final results)
 validation_region <- FALSE
 validation_code <- "G"
-use_default_params <- TRUE # using the default model parameters, and dn 30 for Austria and Germany
+use_default_params <- FALSE # using the default model parameters, and dn 30 for Austria and Germany
 
 sensitivity_analysis <- FALSE
 
@@ -25,8 +25,8 @@ path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped") # for the prec
 
 # Time period of interest (Used in precipitation data extraction & mask when applying model) -------------------------------------
 
-date_begin <- "2010-01-01" # 2010-01-01
-date_end <- "2016-12-31" # 2016-12-31
+date_begin <- "2010-01-01" # 2010-01-01 #2021-01-01
+date_end <- "2016-12-31" # 2016-12-31 #2024-12-31
 
 
 time_period_of_interest <- "2010_2016" # either "2010_2016" (for data from 2015 in imp and pop) or "2021_2024" (for data from 2021 used in imp and pop)
@@ -41,7 +41,7 @@ nam <- paste(current_years, collapse = "_")
 # Area of interest ---------------------------------------------------------------------------------------------------------------
 
 area_of_interest <- file.path(path_intermediate_res, "FUA_vienna", "FUA_vienna.shp")
-area_of_interest_name <- paste0("Vienna_NOTlnerror_checkchanges_", nam) #Austria_default_params
+area_of_interest_name <- paste0("Vienna_NOTlnerror_viennaparams_CS058_", nam) #Austria_default_params
 
 #file.path(path_intermediate_res, "Einzugsgebiet_Traisen", "traisen_reduced.shp")
 #file.path(path_intermediate_res, "Einzugsgebiet_Bad_Leonfelden", "Einzugsgebiet_Bad_Leonfelden.shp")
@@ -79,8 +79,8 @@ if (validation_region){
 
     val_data <- setDT(read.xlsx(file.path(path_intermediate_res, "Validation_data.xlsx"), sheet = 1))
     val_value <- val_data[Code == validation_code, Value]
-    manual_CS <- FALSE
-    #manual_CS <- val_data[Code == validation_code, CS]
+    #manual_CS <- FALSE
+    manual_CS <- val_data[Code == validation_code, CS]
 
     if (time_period_of_interest == "2021_2024"){
         manual_pop <- val_data[Code == validation_code, Pop2018_2023] / factor_enlarge_validation
@@ -125,9 +125,9 @@ if (use_default_params){
     k0 <- 0.3
     W0 <- 1.5
     dn <- 30
-    dt <- 4
+    dt <- 2
     W1 <- 5
-    W2 <- 2
+    W2 <- 1.5
 }
 
 dwf_per_capita <- 0.2

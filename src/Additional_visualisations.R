@@ -122,7 +122,7 @@ validation_plot <- function(validation_region){
         "Model parameters\n",
         "k0 = ", used_params$k0, "\n",
         "W0 = ", used_params$W0, "\n",
-        "dn = ", used_params$dn, " (AUT/GER: 30)\n",
+        "dn = ", used_params$dn, "\n",# (AUT/GER: 30)
         "dt = ", used_params$dt, "\n",
         "W1 = ", used_params$W1, "\n",
         "W2 = ", used_params$W2

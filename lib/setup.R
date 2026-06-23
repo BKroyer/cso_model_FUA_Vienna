@@ -1,7 +1,7 @@
 # File that defines data, constants or variables for the analysis and will be run automatically
 # by Bettina Kroyer
 
-already_processed <- TRUE
+already_processed <- FALSE # are the aoi and settlements cropped and in the right EPSG? if so, files settlements_cropped_epsg3035.gpkg etc. must exist, see further down
 datum <- format(Sys.Date(), format="%b%d") # for naming reasons
 ln_A_B <- FALSE # calculating with typo in ln network flow scenario b?
 round_to <- 4 # number of digits to round results to (only applied to final results)
@@ -18,6 +18,7 @@ path_intermediate_res <- file.path("data_NOTREAD", "intermediate_results") # for
 path_input <- file.path("data")
 path_raw_nc <- file.path(path_intermediate_res, "nc_raw") # for the precipitation data extraction for settlements
 path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped") # for the precipitation data extraction for settlements
+path_design_population <- file.path(path_input, "Entsorgungsgebiete_gesamt.xlsx") # either the path to the data with gridcodes or NA
 
 # path_raw_nc <- file.path(path_intermediate_res, "nc_raw_AUT") # for the precipitation data extraction for settlements for Austria
 # path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped_AUT") # for the precipitation data extraction for settlements for Austria
@@ -25,11 +26,11 @@ path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped") # for the prec
 
 # Time period of interest (Used in precipitation data extraction & mask when applying model) -------------------------------------
 
-date_begin <- "2010-01-01" # 2010-01-01 #2021-01-01
-date_end <- "2016-12-31" # 2016-12-31 #2024-12-31
+date_begin <- "2021-01-01" # 2010-01-01 #2021-01-01
+date_end <- "2024-12-31" # 2016-12-31 #2024-12-31
 
 
-time_period_of_interest <- "2010_2016" # either "2010_2016" (for data from 2015 in imp and pop) or "2021_2024" (for data from 2021 used in imp and pop)
+time_period_of_interest <- "2021_2024" # either "2010_2016" (for data from 2015 in imp and pop) or "2021_2024" (for data from 2021 used in imp and pop)
 
 # get years between begin and end date
 yr_begin <- year(date_begin)
@@ -40,8 +41,8 @@ nam <- paste(current_years, collapse = "_")
 
 # Area of interest ---------------------------------------------------------------------------------------------------------------
 
-area_of_interest <- file.path(path_intermediate_res, "FUA_vienna", "FUA_vienna.shp")
-area_of_interest_name <- paste0("Vienna_NOTlnerror_viennaparams_CS058_", nam) #Austria_default_params
+area_of_interest <- "data/wwtp_aoi_buffered_epsg4326.gpkg"
+area_of_interest_name <- paste0("Entsorgungsgebiete_Bemessungswert_", nam) #Austria_default_params
 
 #file.path(path_intermediate_res, "Einzugsgebiet_Traisen", "traisen_reduced.shp")
 #file.path(path_intermediate_res, "Einzugsgebiet_Bad_Leonfelden", "Einzugsgebiet_Bad_Leonfelden.shp")
@@ -53,7 +54,8 @@ area_of_interest_name <- paste0("Vienna_NOTlnerror_viennaparams_CS058_", nam) #A
 #"C:\\Users\\simulation\\bkroyer\\git_clone\\cso-modell-upper-danube\\data\\Validation_Einzugsgebiete\\Validation_Einzugsgebiete.shp"
 
 # relevant for the pre-processing: precipitation, imperviousness, population and CS share data will be extracted for the specified settlements
-settlements <- "Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp"
+settlements <- "data/Entsorgungsgebiete_gesamt.gpkg"
+gridcode_nam <- "NAME" #"gridcode" # the name column of the spatial units
 
 #"Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp" # else FUA or the validation regions; used in the wrapper_preprocess_data only! so check if processing needed
 #"C:\\Users\\simulation\\bkroyer\\git_clone\\cso-modell-upper-danube\\data\\Validation_Einzugsgebiete\\Validation_Einzugsgebiete.shp"#
@@ -93,6 +95,13 @@ if (validation_region){
 }
 
 
+# Processed data names -----------------------------------------------------------------------------------------------------------
+filenam_prec_data_base <- paste0("precipitation_ts_AUT_WWTP") # the year is added in file 04
+filenam_imp_data <- ifelse(time_period_of_interest == "2010_2016", "impervious_area_2015_AUT_WWTP.rds", "impervious_area_2021_AUT_WWTP.rds")
+filenam_cs_data <- "share_CS_wwtp.rds"
+filenam_pop_data <- ifelse(time_period_of_interest == "2010_2016", "population_2015_AUT_WWTP.rds", "population_2021_AUT_WWTP.rds")
+# else population_2021.rds and impervious_area_2021_AUT etc.
+
 
 
 # Gridcode specification (NULL to process all within AoI, else vector of gridcodes to process) -----------------------------------
@@ -125,9 +134,9 @@ if (use_default_params){
     k0 <- 0.3
     W0 <- 1.5
     dn <- 30
-    dt <- 2
+    dt <- 4
     W1 <- 5
-    W2 <- 1.5
+    W2 <- 2
 }
 
 dwf_per_capita <- 0.2
@@ -140,6 +149,7 @@ if (!validation_region){ # for validation regions: Cs share and population from 
 
 
 # Data processing / calling -------------------------------------------------------------------------------------------------------
+settlements_id <- "NAME"
 
 if (already_processed){
     urb_4326 <- vect("data/settlements_cropped_epsg4326.gpkg")
@@ -178,7 +188,17 @@ if (!validation_region){
     }
 
     urb_3035_cropped_to_aoi <- intersect(urb_3035, aoi_3035)
-    gridcode_in_aoi <- unique(urb_3035_cropped_to_aoi$gridcode)
+    #gridcode_in_aoi <- unique(urb_3035_cropped_to_aoi[gridcode_nam])
+
+
+    # for the Ensorgungsgebiete dataset
+    add_number <- c(1:length(urb_3035_cropped_to_aoi))
+    unique_gridcodes <- as.vector(unlist(unique(values(urb_3035_cropped_to_aoi[gridcode_nam]))))
+    gridcode_in_aoi <- unique_gridcodes # paste(add_number, unlist(values(urb_3035_cropped_to_aoi[gridcode_nam])), sep = "_")
+    # the number add-on was needed for the preprocessing to consider the "Anteil" dataset correctly
+    ###
+
+
 
     if (!is.null(gridcode_to_process) & !(all(gridcode_to_process %in% gridcode_in_aoi))){
         gridcode_outside <- gridcode_to_process[!(gridcode_to_process %in% gridcode_in_aoi)]
@@ -198,26 +218,26 @@ if (!validation_region){
 
 if (use_default_params){
 
-    params <- list(data.table(gridcode = gridcode_to_process, k0 = k0, W0 = W0, dn = dn, dt = dt, W1 = W1, W2 = W2, dwf_per_capita = dwf_per_capita, factor_enlarge_prec = 1, key = "gridcode"))
+    params <- list(data.table(gridcode = unique_gridcodes, k0 = k0, W0 = W0, dn = dn, dt = dt, W1 = W1, W2 = W2, dwf_per_capita = dwf_per_capita, factor_enlarge_prec = 1, key = "gridcode"))
 
-    if (!already_processed){
-
-        austria_border <- project(vect("Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp"), urb_3035)
-        germany_border <- project(vect("Q:\\GIS-Daten\\Other Countries\\Germany\\germany_border\\germany_border.shp"), urb_3035)
-
-        aut_ger <- terra::aggregate(rbind(austria_border, germany_border))
-        gridcodes_in_aut_germ <- unique(intersect(urb_3035, aut_ger)$gridcode)
-
-        gridcodes_in_aut_germ <- c(gridcodes_in_aut_germ, LETTERS[1:10]) # adding the validation region gridcodes
-
-        saveRDS(gridcodes_in_aut_germ, file.path(path_input, "gridcodes_in_aut_germ.rds"))
-
-    } else{
-
-        gridcodes_in_aut_germ <- readRDS(file.path(path_input, "gridcodes_in_aut_germ.rds"))
-    }
-
-    params[[1]][gridcode %in% gridcodes_in_aut_germ, dn := 30]
+    # if (!already_processed){
+    #
+    #     austria_border <- project(vect("Q:/GIS-Daten/Oesterreich/Verwaltungsgrenzen/Bundeslaender.shp"), urb_3035)
+    #     germany_border <- project(vect("Q:\\GIS-Daten\\Other Countries\\Germany\\germany_border\\germany_border.shp"), urb_3035)
+    #
+    #     aut_ger <- terra::aggregate(rbind(austria_border, germany_border))
+    #     gridcodes_in_aut_germ <- unique(intersect(urb_3035, aut_ger)$gridcode)
+    #
+    #     gridcodes_in_aut_germ <- c(gridcodes_in_aut_germ, LETTERS[1:10]) # adding the validation region gridcodes
+    #
+    #     saveRDS(gridcodes_in_aut_germ, file.path(path_input, "gridcodes_in_aut_germ.rds"))
+    #
+    # } else{
+    #
+    #     gridcodes_in_aut_germ <- readRDS(file.path(path_input, "gridcodes_in_aut_germ.rds"))
+    # }
+    #
+    # params[[1]][gridcode %in% gridcodes_in_aut_germ, dn := 30]
 
 
 } else {
@@ -236,7 +256,7 @@ if (use_default_params){
         # list instead of single row
         params <- lapply(varying_param, function(vary_temp) {
             data.table(
-                gridcode = gridcode_to_process,
+                gridcode = unique_gridcodes,
                 k0 = k0,
                 W0 = W0,
                 dn = dn,
@@ -254,7 +274,7 @@ if (use_default_params){
         area_of_interest_name <- paste0(area_of_interest_name, "_prec_", varying_param)
 
     } else {
-        params <- list(data.table(gridcode = gridcode_to_process, k0 = k0, W0 = W0, dn = dn, dt = dt, W1 = W1, W2 = W2, dwf_per_capita = dwf_per_capita, factor_enlarge_prec = 1, key = "gridcode"))
+        params <- list(data.table(gridcode = unique_gridcodes, k0 = k0, W0 = W0, dn = dn, dt = dt, W1 = W1, W2 = W2, dwf_per_capita = dwf_per_capita, factor_enlarge_prec = 1, key = "gridcode"))
     }
 }
 

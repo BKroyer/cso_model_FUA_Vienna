@@ -25,17 +25,8 @@ load.project()
 
 if (!validation_region){
     # Import population data
-    if (time_period_of_interest == "2010_2016"){
-        pop_dt <- readRDS(file.path(path_input, "population_2015.rds"))
-        #pop_dt <- readRDS(file.path(path_input, "population_2015_AUT.rds"))
-    }else{
-        if(time_period_of_interest == "2021_2024"){
-            pop_dt <- readRDS(file.path(path_input, "population_2021.rds"))
-            #pop_dt <- readRDS(file.path(path_input, "population_2021_AUT.rds"))
-        }else{
-            errorCondition("use either 2010_2016 or 2021_2024 as time_period_of_interest")
-        }
-    }
+    pop_dt <- readRDS(file.path(path_input, filenam_pop_data))
+
     setDT(pop_dt, key = "settlement_id")
     pop_dt <- pop_dt[.(gridcode_to_process)]
     setkey(pop_dt, settlement_id)
@@ -44,28 +35,28 @@ if (!validation_region){
 
     sum(pop_dt$population)
 
+    # get the design population data
+    if (!is.na(path_design_population)) {
+        design_pop_dt <- read.xlsx(path_design_population)
+        setDT(design_pop_dt)
+        setnames(design_pop_dt, gridcode_nam, "settlement_id")
+
+        # if no design population is found, use the EUROSTAT population
+        design_pop_dt <- design_pop_dt[is.na(Bemessungswert), Bemessungswert := pop_dt[.SD, on = "settlement_id", x.population]]
+    }
+
 
     # Import impervious area data
-    if (time_period_of_interest == "2010_2016"){
-        imp_dt <- readRDS(file.path(path_input, "impervious_area_2015.rds"))
-        #imp_dt <- readRDS(file.path(path_input, "impervious_area_2015_AUT.rds"))
-    }else{
-        if(time_period_of_interest == "2021_2024"){
-            imp_dt <- readRDS(file.path(path_input, "impervious_area_2021.rds"))
-            #imp_dt <- readRDS(file.path(path_input, "impervious_area_2021_AUT.rds"))
-        }else{
-            errorCondition("use either 2010_2016 or 2021_2024 as time_period_of_interest")
-        }
-    }
+    imp_dt <- readRDS(file.path(path_input, filenam_imp_data))
+
     setDT(imp_dt, key = "settlement_id")
     imp_dt <- imp_dt[.(gridcode_to_process)]
     setkey(imp_dt, settlement_id)
 
 
     # Import share served by CS
-    # share_dt <- data.table(gridcode = unique(prec_dt$gridcode), share_served_by_CS = rep(0.28, length(gridcode_to_process)), key = "gridcode")
-    share_dt <- readRDS(file.path(path_input, "share_CS.rds"))
-    #share_dt <- readRDS(file.path(path_input, "share_CS_AUT.rds"))
+    share_dt <- readRDS(file.path(path_input, filenam_cs_data))
+    names(share_dt)[1] <- "gridcode"
     setDT(share_dt, key = "gridcode")
     share_dt <- share_dt[.(gridcode_to_process)]
     setkey(share_dt, gridcode)
@@ -136,7 +127,6 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
 
     area_of_interest_name_temp <- area_of_interest_name[i]
     params_temp <- params[[i]]
-    #print(params_temp)
 
     # create Workbook with all sheets
     wb <- createWorkbook()
@@ -179,11 +169,9 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
         } else {
             file_path <- file.path(
                 path_input,
-                paste0("precipitation_ts_settlements_", year_temp, ".rds")
-                #paste0("precipitation_ts_AUT_", year_temp, ".rds")
+                paste0(filenam_prec_data_base, year_temp, ".rds")
             )
         }
-
 
 
 
@@ -193,11 +181,12 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
             errorCondition(paste0("RDS data for precipitation for year ",year_temp," not found in specified path."))
         }
 
+        names(prec_dt_year)[1] <- "gridcode"
+
         setkey(prec_dt_year, gridcode, time)
-        prec_dt_year <- prec_dt_year[
-            data.table(gridcode = unique(gridcode_to_process)),
-            on = .(gridcode)
-        ]#[time >= date_begin & time <= date_end] #option to filter by time again, only relevant if not entire years are used
+        # prec_dt_year <- prec_dt_year[ data.table(gridcode =
+        # unique(gridcode_to_process)), on = .(gridcode) ]#[time >= date_begin &
+        # time <= date_end] #option to filter by time again, only relevant if not entire years are used
 
         prec_dt_year$time <- as.POSIXct( # fix the time format (CET/CEST because of summer time, but I need the physical time)
             format(prec_dt_year$time, "%Y-%m-%d %H:%M:%S"),
@@ -223,6 +212,7 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
             run_cso_for_single_gridcode,
             params = params_temp[, 1:8], # no factor_enlarge_prec used in the model, would be 9th
             pop_dt = pop_dt,
+            design_pop_dt = design_pop_dt,
             imp_dt = imp_dt,
             share_dt = share_dt,
             manual_pop = manual_pop,
@@ -326,7 +316,8 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
             setColWidths(wb, sheet_results, cols = 1:cols_temp, widths = widths_temp)
 
 
-            summary_overflow_per_year <- summary_overflow[which(summary_overflow$metric == "total annual precipitation [mm]"):which(summary_overflow$metric == "DWF volume [Mm3]"), ]
+            summary_overflow_per_year <- summary_overflow[which(summary_overflow$metric == "total annual precipitation [mm]"):
+                                                              which(summary_overflow$metric == "DWF volume [Mm3]"), ]
             startrow <- 2 + (which(year_temp == current_years)-1) * (nrow(summary_overflow_per_year))
             writeData(wb, sheet_overflow_yearly, summary_overflow_per_year, startRow = startrow, colNames = FALSE)
             setColWidths(wb, sheet_overflow_yearly, cols = 1:cols_temp, widths = 35)

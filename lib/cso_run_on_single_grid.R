@@ -6,6 +6,7 @@
 run_cso_for_single_gridcode <- function(gridcode_temp,
                                         params,
                                         pop_dt,
+                                        design_pop_dt = NA,
                                         imp_dt,
                                         share_dt,
                                         prec_dt,
@@ -30,6 +31,12 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
         pop <- as.numeric(manual_pop)
     }
 
+    if (any(!is.na(design_pop_dt))){
+        design_pop <- as.numeric(design_pop_dt[settlement_id  == gridcode_temp]$Bemessungswert * share$share_served_by_CS) # designed for ALL people so also from SS
+    }else{
+        design_pop <- NA
+    }
+
 
     imp   <- imp_dt[settlement_id  == gridcode_temp]
 
@@ -43,6 +50,7 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
         p,
         population = as.numeric(pop/share$share_served_by_CS),
         population_connected = pop,
+        population_design = design_pop,
         imp_area_km2 = imp$imp_area_km2,
         share_served_by_CS = share$share_served_by_CS,
         mean_annual_prec = mean(prec$precipitation_mm * 8 * 365, na.rm=T)
@@ -65,6 +73,7 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
     # run model
     res <- cso_model(
         population = pop,
+        design_population = design_pop,
         area = imp$imp_area_km2,
         share_served_by_CS = share$share_served_by_CS,
         time = prec$time,

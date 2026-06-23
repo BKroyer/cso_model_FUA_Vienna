@@ -9,6 +9,7 @@
 
 cso_model <- function(
     population = NA,                    # numeric. Population of the catchment area discharging into the combined sewer (connected people). Must be > 0. If not given, pop_density must be given.
+    design_population = NA,             # numeric. Population the WWTP was designed for. "Bemessungswert"
     area = NA,                          # numeric impervious catchment area in km². Must be > 0. If not given, pop_density must be given.
     pop_density = NA,                   # population density in persons per km² impervious area served by CS. If missing is calculated from impervious area, population and share_served_by_CS.
     share_served_by_CS = NA,            # share of population served by CS. According to Quaranta et al. (2022) mostly as the national average. If not given, pop_density (by impervious area!) must be given.
@@ -29,6 +30,7 @@ cso_model <- function(
 
     ## Check input data type
     if (!is.na(population)) assert_numeric(population)#assert_count(population)
+    if (!is.na(design_population)) assert_numeric(design_population)#assert_count(population)
     assert_number(area, na.ok = TRUE, lower = 0, finite = TRUE)
     if (!is.na(area) & !(area > 0)) stop(sprintf("area must be > 0, but is %s", area))
     assert_posixct(time, any.missing = FALSE, min.len = 8, unique = TRUE, null.ok = FALSE, sorted = TRUE)
@@ -84,6 +86,11 @@ cso_model <- function(
 
     k1 <- dn * qdwf / W1 # Netzwerkspeicher Rate ((timestep)-1) (k1)
     k2 <- dt * qdwf / W2 # Tank Rate ((timestep)-1) (k2)
+
+    if (!is.na(design_population)){
+        k1 <- dn * ((design_population / (area * share_served_by_CS)) * dwf_per_capita / timesteps_per_day / 1000) / W1
+        k2 <- dn * ((design_population / (area * share_served_by_CS)) * dwf_per_capita / timesteps_per_day / 1000) / W2
+    }
 
     network_max_conveyance <- qdwf * dn # Maximum conveyance of the network (mm/timestep/m²) according to Pistocci and Dorati 2018
     k1W1 <- W1 * k1 # Maximum conveyance of the network k1*W1

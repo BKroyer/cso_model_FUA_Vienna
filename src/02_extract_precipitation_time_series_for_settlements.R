@@ -32,8 +32,8 @@ extract_prec_year <- function(path, year_str, nc_files_cropped, nr_timesteps = 8
 
 
 # Validation Einzugsgebiete
-val_einzug <- vect("C:\\Users\\simulation\\bkroyer\\git_clone\\cso-modell-upper-danube\\data\\Validation_Einzugsgebiete\\Validation_Einzugsgebiete.shp")
-val_4326 <- project(val_einzug, urb_4326)
+#val_einzug <- vect("C:\\Users\\simulation\\bkroyer\\git_clone\\cso-modell-upper-danube\\data\\Validation_Einzugsgebiete\\Validation_Einzugsgebiete.shp")
+#val_4326 <- project(val_einzug, urb_4326)
 
 
 # loop to save extracted prec time series as rds for every specified year separately
@@ -48,8 +48,13 @@ for (current_years in as.character(c(2010:2016))){
 
     # extract the precipitation for all settlements:
     terra::gdalCache(30000)
-    settlements_id <- "gridcode"
+
     precip_urb <- exact_extract(precip_rast, sf::st_as_sf(urb_4326), fun = "mean", append_cols = settlements_id, stack_apply = TRUE) # prec data in in EPSG:4326
+
+    precip_urb$NAME_nr <- gridcode_to_process
+
+    precip_urb <- merge(precip_urb, anteil, by.x = "NAME_nr", by.y = "settlement_id")
+
 
     # for the validation regions
     #precip_urb <- exact_extract(precip_rast, sf::st_as_sf(val_4326), fun = "mean", append_cols = settlements_id, stack_apply = TRUE) # prec data in in EPSG:4326
@@ -59,21 +64,45 @@ for (current_years in as.character(c(2010:2016))){
     setDT(precip_urb)
     rm(precip_rast)#, nc_files_cropped)
     gc()
-    precip_dt <- melt(precip_urb, id.vars = settlements_id, value.name = "precipitation_mm")
+
+    mean_cols <- grep("^mean\\.", names(precip_urb), value = TRUE)
+    precip_long <- melt(
+        precip_urb,
+        id.vars = c("NAME.x", "Anteil"),
+        measure.vars = mean_cols,
+        variable.name = "mean_var",
+        value.name = "precipitation_mm"
+    )
+
+    precip_long[, timestamp := sub("^mean\\.", "", mean_var)]
+    precip_long[, weighted_precip := precipitation_mm * Anteil]
+    result <- precip_long[
+        , .(precipitation_mm = sum(precipitation_mm * Anteil, na.rm = TRUE) / sum(Anteil, na.rm = TRUE)),
+        by = .(NAME_nr = get("NAME.x"), timestamp)
+    ]
+    precip_dt <- result
+    names(precip_dt)[1] <- c("NAME")
+
+    #precip_dt <- melt(precip_urb, id.vars = settlements_id, value.name = "precipitation_mm")
     # saveRDS(precip_dt,"data/intermediate_results/precipitation_ts_settlements_prelim.rds")
     # rm(precip_urb)
     # gc()
     setkeyv(precip_dt, settlements_id)
     settlement_ids <- unique(precip_dt[,..settlements_id])
-    precip_dt[, time:=as.POSIXct(variable, format = "mean.%Y%j.%H"), by = gridcode]
+    #precip_dt[, time:=as.POSIXct(variable, format = "mean.%Y%j.%H"), by = gridcode]
+    precip_dt[, time:=as.POSIXct(timestamp, format = "%Y%j.%H"), by = NAME]
 
-    precip_dt[, variable:=NULL]
+    precip_dt[, timestamp:=NULL]
 
     # Save data table as RDS as this saves much space
     #saveRDS(precip_dt, file.path(path_intermediate_res, paste0("precipitation_ts_settlements_", current_years,".rds")))
 
-    saveRDS(precip_dt, file.path(path_intermediate_res, paste0("precipitation_ts_AUT_", current_years,".rds")))
+    # aggregate according to Anteil
+
+
+    saveRDS(precip_dt, file.path(path_intermediate_res, paste0("precipitation_ts_AUT_WWTP", current_years,".rds")))
     # remove preliminary data
     # file.remove("data/intermediate_results/precipitation_ts_settlements_prelim.rds")
 
 }
+

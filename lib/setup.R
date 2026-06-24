@@ -18,7 +18,8 @@ path_intermediate_res <- file.path("data_NOTREAD", "intermediate_results") # for
 path_input <- file.path("data")
 path_raw_nc <- file.path(path_intermediate_res, "nc_raw") # for the precipitation data extraction for settlements
 path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped") # for the precipitation data extraction for settlements
-path_design_population <- file.path(path_input, "Entsorgungsgebiete_gesamt.xlsx") # either the path to the data with gridcodes or NA
+path_design_population <- NA#file.path(path_input, "Entsorgungsgebiete_gesamt.xlsx") # either the path to the data with gridcodes or NA
+# if design population is given, adjust dn and dt to match design population
 
 # path_raw_nc <- file.path(path_intermediate_res, "nc_raw_AUT") # for the precipitation data extraction for settlements for Austria
 # path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped_AUT") # for the precipitation data extraction for settlements for Austria
@@ -42,7 +43,7 @@ nam <- paste(current_years, collapse = "_")
 # Area of interest ---------------------------------------------------------------------------------------------------------------
 
 area_of_interest <- "data/wwtp_aoi_buffered_epsg4326.gpkg"
-area_of_interest_name <- paste0("Entsorgungsgebiete_Bemessungswert_", nam) #Austria_default_params
+area_of_interest_name <- paste0("Entsorgungsgebiete_Eurostat_manualCS_HEF_manualpop_angeschlossen_", nam) #Austria_default_params #_manualpop
 
 #file.path(path_intermediate_res, "Einzugsgebiet_Traisen", "traisen_reduced.shp")
 #file.path(path_intermediate_res, "Einzugsgebiet_Bad_Leonfelden", "Einzugsgebiet_Bad_Leonfelden.shp")
@@ -106,7 +107,8 @@ filenam_pop_data <- ifelse(time_period_of_interest == "2010_2016", "population_2
 
 # Gridcode specification (NULL to process all within AoI, else vector of gridcodes to process) -----------------------------------
 
-gridcode_to_process <- NULL#271107 #NULL#c(253253, 261635) #NULL#c(253253) #c(253253, 261635) # 253253 is wien, the others are random to test multiple processing #, 259334, 266367, 265844
+gridcode_to_process <- NULL #"Leiblachtal" #NULL #unique_gridcodes[1:50]
+    #NULL#271107 #NULL#c(253253, 261635) #NULL#c(253253) #c(253253, 261635) # 253253 is wien, the others are random to test multiple processing #, 259334, 266367, 265844
 
 # model params for the gridcodes, either one for all or one per gridcode (vector of length of gridcodes)
 
@@ -191,7 +193,7 @@ if (!validation_region){
     #gridcode_in_aoi <- unique(urb_3035_cropped_to_aoi[gridcode_nam])
 
 
-    # for the Ensorgungsgebiete dataset
+    # for the Entsorgungsgebiete dataset
     add_number <- c(1:length(urb_3035_cropped_to_aoi))
     unique_gridcodes <- as.vector(unlist(unique(values(urb_3035_cropped_to_aoi[gridcode_nam]))))
     gridcode_in_aoi <- unique_gridcodes # paste(add_number, unlist(values(urb_3035_cropped_to_aoi[gridcode_nam])), sep = "_")
@@ -246,8 +248,8 @@ if (use_default_params){
         # specify the varying parameter / data
         # varying_param <- seq(0.1, 1.9, 0.2) # k0
         # varying_param <- seq(0.2, 5, 0.4) # W0
-        # varying_param <- seq(3, 30, 1) # dn
-        varying_param <- seq(10,50,10) # prec
+        varying_param <- seq(3, 30, 1) # dn
+        # varying_param <- seq(10,50,10) # prec
         # varying_param <- seq(2, 20, 1) # dt
         # varying_param <- seq(0.2, 5, 0.4) # W1
         # varying_param <- seq(0.2, 9.8, 0.8) # W2
@@ -256,17 +258,17 @@ if (use_default_params){
         # list instead of single row
         params <- lapply(varying_param, function(vary_temp) {
             data.table(
-                gridcode = unique_gridcodes,
+                gridcode = gridcode_to_process,
                 k0 = k0,
                 W0 = W0,
-                dn = dn,
-                #dn = vary_temp,
+                #dn = dn,
+                dn = vary_temp,
                 dt = dt,
                 W1 = W1,
                 W2 = W2,
                 dwf_per_capita = dwf_per_capita,
-                #factor_enlarge_prec = 1,
-                factor_enlarge_prec = vary_temp,
+                factor_enlarge_prec = 1,
+                #factor_enlarge_prec = vary_temp,
                 key = "gridcode"
             )
         })
@@ -274,7 +276,7 @@ if (use_default_params){
         area_of_interest_name <- paste0(area_of_interest_name, "_prec_", varying_param)
 
     } else {
-        params <- list(data.table(gridcode = unique_gridcodes, k0 = k0, W0 = W0, dn = dn, dt = dt, W1 = W1, W2 = W2, dwf_per_capita = dwf_per_capita, factor_enlarge_prec = 1, key = "gridcode"))
+        params <- list(data.table(gridcode = gridcode_to_process, k0 = k0, W0 = W0, dn = dn, dt = dt, W1 = W1, W2 = W2, dwf_per_capita = dwf_per_capita, factor_enlarge_prec = 1, key = "gridcode"))
     }
 }
 

@@ -35,14 +35,30 @@ if (!validation_region){
 
     sum(pop_dt$population)
 
+
+    # change pop to validation data
+    val_data <- setDT(read.xlsx("data/Validation_data.xlsx"))
+    val_data$NAME[val_data$NAME == "Wien Kanal"] <- "ebswien kläranlage & tierservice"
+    duplrow <- val_data[1]
+    duplrow$NAME <- "ARA Pulkau"
+    val_data[1, NAME := "ARA Schrattenthal"]
+    val_data <- rbind(val_data, duplrow)
+    setnames(val_data, "NAME", "settlement_id")
+
+    pop_dt[val_data, population := i.Pop2018_2023, on = "settlement_id"] # i.EW
+    setnames(val_data, "settlement_id", "gridcode")
+
     # get the design population data
-    if (!is.na(path_design_population)) {
+    if (!is.na(path_design_population)) { # use the design population and utilisation rate
         design_pop_dt <- read.xlsx(path_design_population)
         setDT(design_pop_dt)
         setnames(design_pop_dt, gridcode_nam, "settlement_id")
 
         # if no design population is found, use the EUROSTAT population
         design_pop_dt <- design_pop_dt[is.na(Bemessungswert), Bemessungswert := pop_dt[.SD, on = "settlement_id", x.population]]
+
+    } else {
+        design_pop_dt <- NA
     }
 
 
@@ -61,6 +77,15 @@ if (!validation_region){
     share_dt <- share_dt[.(gridcode_to_process)]
     setkey(share_dt, gridcode)
     share_dt[share_served_by_CS>1, share_served_by_CS := share_served_by_CS/100]
+
+
+    # change CS share to validation data
+    # but not for ... E, F ,J ?
+    val_data <- val_data[!(Code %in% c("H", "E", "F"))]
+    share_dt[val_data, share_served_by_CS := i.CS, on = "gridcode"]
+
+
+
 
     # custom CS share
     if (manual_CS){
@@ -184,8 +209,7 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
         names(prec_dt_year)[1] <- "gridcode"
 
         setkey(prec_dt_year, gridcode, time)
-        # prec_dt_year <- prec_dt_year[ data.table(gridcode =
-        # unique(gridcode_to_process)), on = .(gridcode) ]#[time >= date_begin &
+        prec_dt_year <- prec_dt_year[ data.table(gridcode = unique(gridcode_to_process)), on = .(gridcode) ]#[time >= date_begin &
         # time <= date_end] #option to filter by time again, only relevant if not entire years are used
 
         prec_dt_year$time <- as.POSIXct( # fix the time format (CET/CEST because of summer time, but I need the physical time)

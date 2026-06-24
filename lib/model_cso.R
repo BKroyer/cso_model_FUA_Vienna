@@ -84,13 +84,23 @@ cso_model <- function(
         }
     }
 
+    if (!is.na(design_population)){
+        if (design_population == 0){
+            design_population <- 0.0000000001
+        }
+        if (population == 0){
+            population <- 0.0000000001
+        }
+
+        util_rate <- population / (design_population * (125/200)) # factor considering industry and gw infiltration
+
+        # less utilisation means higher dilution rate triggering overflow
+        dn <- dn / util_rate
+        dt <- dt / util_rate
+    }
+
     k1 <- dn * qdwf / W1 # Netzwerkspeicher Rate ((timestep)-1) (k1)
     k2 <- dt * qdwf / W2 # Tank Rate ((timestep)-1) (k2)
-
-    if (!is.na(design_population)){
-        k1 <- dn * ((design_population / (area * share_served_by_CS)) * dwf_per_capita / timesteps_per_day / 1000) / W1
-        k2 <- dn * ((design_population / (area * share_served_by_CS)) * dwf_per_capita / timesteps_per_day / 1000) / W2
-    }
 
     network_max_conveyance <- qdwf * dn # Maximum conveyance of the network (mm/timestep/m²) according to Pistocci and Dorati 2018
     k1W1 <- W1 * k1 # Maximum conveyance of the network k1*W1

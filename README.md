@@ -26,30 +26,30 @@ If the model output shall be validated against measurement data, there is the op
 
 Here is an overview of the project structure including short descriptions of the purpose of each file:
 
-- cso-modell-upper-danube/
-	- cache/ _Runs every time, can store data (paths) temporarily_
-	- config/ _Runs every time_
+- **cso-modell-upper-danube/**
+	- **cache/** _Runs every time, can store data (paths) temporarily_
+	- **config/** _Runs every time_
 		- global.dcf _Project settings and which libraries to load_
-	- data/ Input data such as precipitation, imperviousness and CS share
-	- data_NOTREAD/ Stores/saves intermediate results and preprocessed data
-	- lib/ Runs every time
-		- cso_model_helpers.cpp The translations to C++
-		- cso_run_on_single_grid.R Helper function to parallelize gridcodes in cso model
-		- model_cso.R Contains the main model function cso_model
-		- Prepare_GloH2O_MSWEP_data.R Functions to download precipitation data from MSWEP googledrive
-		- setup.R Basic model run settings
-		- validation_functions.R Functions to process results and validation data
-		- Preprocess_data.R Function to preprocess data (the AoI and settlements)
-		- munge/ Could store preprocessing scripts, here only unused examples
-	- output/ Storage for final results
-	- src/ Processing scripts to run manually
-		- 01_download_and_crop_GloH2O_MSWEP_precipitation.R Downloads precipitation data and crops to AoI
-		- 02_extract_precipitation_time_series_for_settlements.R Extracts and saves (.rds) precipitation time series for each settlement.
-		- 03_prepare_additional_geodata.R Preprocessing of imperviousness, population and share of CS data.
-		- 04_cso_data_import_processing.R loads relevant input data, parallel processing over gridcodes, aggregates and saves results
-		- Additional_visualisations.R Some plots (precipitation, results,...)
-		- Comparing_to_Excel.R Saved model run settings from Replication phase
-		- Excel_formula.txt Copies from Excel commands
-		- Investigate_lnB_A.R Visualising influence of ln typo
+	- **data/** _Input data such as precipitation, imperviousness and CS share_
+	- **data_NOTREAD/** _Stores/saves intermediate results and preprocessed data_
+	- **lib/** _Runs every time_
+		- **cso_model_helpers.cpp** _The translations to C++_
+		- **cso_run_on_single_grid.R** _Helper function to parallelize gridcodes in cso model_
+		- **model_cso.R** _Contains the main model function cso_model_
+		- **Prepare_GloH2O_MSWEP_data.R** _Functions to download precipitation data from MSWEP googledrive_
+		- **setup.R** _Basic model run settings_
+		- **validation_functions.R** _Functions to process results and validation data_
+		- **Preprocess_data.R** _Function to preprocess data (the AoI and settlements)_
+	- **munge/** _Could store preprocessing scripts, here only unused examples_
+	- **output/** _Storage for final results_
+	- **src/** _Processing scripts to run manually_
+		- **01_download_and_crop_GloH2O_MSWEP_precipitation.R** _Downloads precipitation data and crops to AoI_
+		- **02_extract_precipitation_time_series_for_settlements.R** _Extracts and saves (.rds) precipitation time series for each settlement._
+		- **03_prepare_additional_geodata.R** _Preprocessing of imperviousness, population and share of CS data._
+		- **04_cso_data_import_processing.R** _loads relevant input data, parallel processing over gridcodes, aggregates and saves results_
+		- **Additional_visualisations.R** _Some plots (precipitation, results,...)_
+		- **Comparing_to_Excel.R** _Saved model run settings from Replication phase_
+		- **Excel_formula.txt** _Copies from Excel commands_
+		- **Investigate_lnB_A.R** _Visualising influence of ln typo_
 
 

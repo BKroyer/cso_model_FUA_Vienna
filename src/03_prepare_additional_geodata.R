@@ -18,19 +18,19 @@ imp_input <- rast("data/imp2021_AoI_incl_AUT.tif")
 # paper used 2015; 2015 data on D:/
 urb_proj_imp <- project(urb_3035, imp_input)
 imp_urb <- exact_extract(imp_input, sf::st_as_sf(urb_proj_imp), fun = "mean", append_cols = settlements_id)
-#imp <- data.table(settlement_id = imp_urb$gridcode, mean_imperviousness = imp_urb$mean/100, settlement_area = urb_area)
-imp <- data.table(settlement_id = gridcode_to_process, mean_imperviousness = imp_urb$mean/100, settlement_area = urb_area)
+imp <- data.table(settlement_id = imp_urb[, settlements_id], mean_imperviousness = imp_urb$mean/100, settlement_area = urb_area)
+#imp <- data.table(settlement_id = gridcode_to_process, mean_imperviousness = imp_urb$mean/100, settlement_area = urb_area)
 imp[, imp_area_km2 := settlement_area * mean_imperviousness]
 
 # WWTP: attach "Anteil", then aggregate to the WWTPs accordingly
-anteil <- as.data.table(values(settlements_epsg4326[, c("NAME", "Anteil")]))
-anteil$settlement_id <- gridcode_to_process
-imp <- merge(imp, anteil, by = "settlement_id")
-imp_aggr <- imp[, .(imp_area_km2 = sum(imp_area_km2 * Anteil),
-                    settlement_id = NAME), by = NAME]
+# anteil <- as.data.table(values(settlements_epsg4326[, c("NAME", "Anteil")]))
+# anteil$settlement_id <- gridcode_to_process
+# imp <- merge(imp, anteil, by = "settlement_id")
+# imp_aggr <- imp[, .(imp_area_km2 = sum(imp_area_km2 * Anteil),
+#                     settlement_id = NAME), by = NAME]
 ####
 
-saveRDS(imp_aggr[,.(settlement_id, imp_area_km2)], file.path(path_input, "impervious_area_2021_AUT_WWTP.rds"))
+saveRDS(imp[,.(settlement_id, imp_area_km2)], file.path(path_input, "impervious_area_2021_AUT_FUA.rds"))
 
 
 # population density
@@ -38,14 +38,14 @@ saveRDS(imp_aggr[,.(settlement_id, imp_area_km2)], file.path(path_input, "imperv
 popdens_raw <- rast("data/ESTAT_OBS-VALUE-T_2021_V2.tiff") # T means total population; resolution 1km²x1km²
 urb_proj_pop <- project(urb_3035, popdens_raw)
 pop_urb <- exact_extract(popdens_raw, sf::st_as_sf(urb_proj_pop), fun = "sum", append_cols = settlements_id)
-#pop <- data.table(settlement_id = pop_urb$gridcode, population = pop_urb$sum )
-pop <- data.table(settlement_id = gridcode_to_process, population = pop_urb$sum )
+pop <- data.table(settlement_id = pop_urb[, settlements_id], population = pop_urb$sum )
+#pop <- data.table(settlement_id = gridcode_to_process, population = pop_urb$sum )
 
-pop <- merge(pop, anteil, by = "settlement_id")
-pop_aggr <- pop[, .(population = sum(population * Anteil),
-                    settlement_id = NAME), by = NAME]
+#pop <- merge(pop, anteil, by = "settlement_id")
+#pop_aggr <- pop[, .(population = sum(population * Anteil),
+#                    settlement_id = NAME), by = NAME]
 
-saveRDS(pop_aggr[,.(settlement_id, population)], file.path(path_input, "population_2021_AUT_WWTP.rds"))
+saveRDS(pop[,.(settlement_id, population)], file.path(path_intermediate_res, "population_2021_AUT_FUA.rds"))
 
 # get mean of 2011 and 2018 dataset for a 2015 equivalent
 # both 2011 and 2018 dataset intersected with smaller settlements in QGIS
@@ -74,7 +74,7 @@ pop_2015 <- merge(pop_2011_dt, pop_2018_dt, by = "gridcode")
 pop_2015$TOT_P_2015 <- rowMeans(pop_2015[, c("POP_2018", "POP_2011")])
 pop_2015 <- data.table(settlement_id = pop_2015$gridcode, population = pop_2015$TOT_P_2015)
 
-saveRDS(pop_2015[,.(settlement_id, population)], file.path(path_input, "population_2015.rds")) # not for validatation region, requires pre-computing of 2011 and 2018 data in QGIS again
+saveRDS(pop_2015[,.(settlement_id, population)], file.path(path_intermediate_res, "population_2015.rds")) # not for validatation region, requires pre-computing of 2011 and 2018 data in QGIS again
 
 
 
@@ -107,10 +107,16 @@ cs_int$int_area <- terra::expanse(cs_int, unit = "m")
 
 
 cs_dt <- as.data.table(cs_int)[,
-                               .(share_served_by_CS = sum(share_num * int_area * Anteil) / sum(int_area * Anteil)),
+                               .(share_served_by_CS = sum(share_num * int_area) / sum(int_area)),
 
-                               by = NAME
+                               by = settlements_id
 ]
+
+# cs_dt <- as.data.table(cs_int)[,
+#                                .(share_served_by_CS = sum(share_num * int_area * Anteil) / sum(int_area * Anteil)),
+#
+#                                by = NAME
+# ]
 
 # all_gridcodes <- data.table(
 #     gridcode = urb_3035$gridcode
@@ -133,6 +139,6 @@ share_CS[share_served_by_CS >1, share_served_by_CS := share_served_by_CS/100]
 
 
 
-saveRDS(share_CS[, .(NAME, share_served_by_CS)], file.path(path_intermediate_res, "share_CS_wwtp.rds"))
+saveRDS(share_CS, file.path(path_intermediate_res, "share_CS_AUT_FUA.rds"))
 
 

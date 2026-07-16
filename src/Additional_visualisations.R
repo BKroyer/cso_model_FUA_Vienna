@@ -293,7 +293,7 @@ val_data <- val_data[, .(NAME, Value, Code)]
 setnames(val_data, "gridcode", "NAME", skip_absent = T)
 
 
-res_data <- setDT(read.xlsx("data_NOTREAD/intermediate_results/Entsorgungsgebiete_Eurostat_manualCS_HEF_manualpop_2021_2022_2023_2024_Jun24.xlsx", sheet = "results_per_gridcode"))
+res_data <- setDT(read.xlsx("data_NOTREAD/intermediate_results/Entsorgung_EW_dwf125_lnerror_2021_2022_2023_2024_Jun24.xlsx", sheet = "results_per_gridcode"))
 #res_data2 <- setDT(read.xlsx("data_NOTREAD/intermediate_results/Entsorgungsgebiete_EUROSTAT_extractedCS_2021_2022_2023_2024_Jun24.xlsx", sheet = "results_per_gridcode"))
 
 #res_data[gridcode == "EMREG_BE_Abwasserverband Region Hohenems"]
@@ -317,7 +317,7 @@ bias_plot <- ggplot(plot_data, aes(x = Code, y = bias)) +#, color = year
     geom_segment(aes(x = Code, xend = Code, y = 0, yend = bias),
                  color = "grey50") +
     geom_point(size = 3) + #, alpha = 0.7
-    scale_y_continuous(limits = c(-63.5,63.5), breaks = seq(-60, 60, #seq(floor(min(plot_data$bias)/20)*20,
+    scale_y_continuous(limits = c(-123,123), breaks = seq(-120, 120, #seq(floor(min(plot_data$bias)/20)*20,
                                     #ceiling(max(plot_data$bias)/20)*20,
                                     by = 10),
                        labels = function(x) paste0(x, "%")) +
@@ -327,7 +327,7 @@ bias_plot <- ggplot(plot_data, aes(x = Code, y = bias)) +#, color = year
 #bias_plot
 
 #pdf("bias_Entsorgung_EUROSTAT_wo2024_extracted_CS.pdf", width = 9, height = 10)
-pdf("bias_Entsorgung_EUROSTAT_wo2024_manual_CS_MEAN_woHEF_manualpop_q125.pdf", width = 8, height = 6)
+pdf("bias_Entsorgung_EUROSTAT_wo2024_manual_CS_MEAN_woHEF_EW_125_lnerror.pdf", width = 8, height = 6)
 print(bias_plot)
 dev.off()
 

@@ -37,16 +37,16 @@ if (!validation_region){
 
 
     # change pop to validation data
-    val_data <- setDT(read.xlsx("data/Validation_data.xlsx"))
-    val_data$NAME[val_data$NAME == "Wien Kanal"] <- "ebswien kläranlage & tierservice"
-    duplrow <- val_data[1]
-    duplrow$NAME <- "ARA Pulkau"
-    val_data[1, NAME := "ARA Schrattenthal"]
-    val_data <- rbind(val_data, duplrow)
-    setnames(val_data, "NAME", "settlement_id")
-
-    pop_dt[val_data, population := i.Pop2018_2023, on = "settlement_id"] # i.EW
-    setnames(val_data, "settlement_id", "gridcode")
+    # val_data <- setDT(read.xlsx("data/Validation_data.xlsx"))
+    # val_data$NAME[val_data$NAME == "Wien Kanal"] <- "ebswien kläranlage & tierservice"
+    # duplrow <- val_data[1]
+    # duplrow$NAME <- "ARA Pulkau"
+    # val_data[1, NAME := "ARA Schrattenthal"]
+    # val_data <- rbind(val_data, duplrow)
+    # setnames(val_data, "NAME", "settlement_id")
+    #
+    # pop_dt[val_data, population := i.EW, on = "settlement_id"] # i.EW or i.Pop2018_2023
+    # setnames(val_data, "settlement_id", "gridcode")
 
     # get the design population data
     if (!is.na(path_design_population)) { # use the design population and utilisation rate
@@ -81,8 +81,8 @@ if (!validation_region){
 
     # change CS share to validation data
     # but not for ... E, F ,J ?
-    val_data <- val_data[!(Code %in% c("H", "E", "F"))]
-    share_dt[val_data, share_served_by_CS := i.CS, on = "gridcode"]
+    #val_data <- val_data[!(Code %in% c("H", "E", "F"))]
+    #share_dt[val_data, share_served_by_CS := i.CS, on = "gridcode"]
 
 
 

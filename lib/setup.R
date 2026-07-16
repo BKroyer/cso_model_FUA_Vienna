@@ -3,7 +3,7 @@
 
 already_processed <- FALSE # are the aoi and settlements cropped and in the right EPSG? if so, files settlements_cropped_epsg3035.gpkg etc. must exist, see further down
 datum <- format(Sys.Date(), format="%b%d") # for naming reasons
-ln_A_B <- FALSE # calculating with typo in ln network flow scenario b?
+ln_A_B <- TRUE # calculating with typo in ln network flow scenario b?
 round_to <- 4 # number of digits to round results to (only applied to final results)
 validation_region <- FALSE
 validation_code <- "G"
@@ -17,7 +17,7 @@ sensitivity_analysis <- FALSE
 path_intermediate_res <- file.path("data_NOTREAD", "intermediate_results") # for the results and processed input data
 path_input <- file.path("data")
 path_raw_nc <- file.path(path_intermediate_res, "nc_raw") # for the precipitation data extraction for settlements
-path_cropped_nc <- file.path(path_intermediate_res, "nc_cropped") # for the precipitation data extraction for settlements
+path_cropped_nc <- file.path(path_input, "nc_cropped_AUT") # for the precipitation data extraction for settlements
 path_design_population <- NA#file.path(path_input, "Entsorgungsgebiete_gesamt.xlsx") # either the path to the data with gridcodes or NA
 # if design population is given, adjust dn and dt to match design population
 
@@ -43,7 +43,7 @@ nam <- paste(current_years, collapse = "_")
 # Area of interest ---------------------------------------------------------------------------------------------------------------
 
 area_of_interest <- "data/wwtp_aoi_buffered_epsg4326.gpkg"
-area_of_interest_name <- paste0("Entsorgungsgebiete_Eurostat_manualCS_HEF_manualpop_angeschlossen_", nam) #Austria_default_params #_manualpop
+area_of_interest_name <- paste0("FUA_AUT_CS028_", nam) #Austria_default_params #_manualpop
 
 #file.path(path_intermediate_res, "Einzugsgebiet_Traisen", "traisen_reduced.shp")
 #file.path(path_intermediate_res, "Einzugsgebiet_Bad_Leonfelden", "Einzugsgebiet_Bad_Leonfelden.shp")
@@ -55,12 +55,12 @@ area_of_interest_name <- paste0("Entsorgungsgebiete_Eurostat_manualCS_HEF_manual
 #"C:\\Users\\simulation\\bkroyer\\git_clone\\cso-modell-upper-danube\\data\\Validation_Einzugsgebiete\\Validation_Einzugsgebiete.shp"
 
 # relevant for the pre-processing: precipitation, imperviousness, population and CS share data will be extracted for the specified settlements
-settlements <- "data/Entsorgungsgebiete_gesamt.gpkg"
-gridcode_nam <- "NAME" #"gridcode" # the name column of the spatial units
+settlements <- "data_NOTREAD/intermediate_results/FUA_shp/UA2012_2018_FUA_boundaries_20201218.shp"
+gridcode_nam <- "fua_name" #"gridcode" # the name column of the spatial units
 
 #"Q:/GIS-Daten/Europe/Klaeranlagen/Agglomerations/Small_agglomerations/11270_2022_5880_MOESM1_ESM/agglo.shp" # else FUA or the validation regions; used in the wrapper_preprocess_data only! so check if processing needed
 #"C:\\Users\\simulation\\bkroyer\\git_clone\\cso-modell-upper-danube\\data\\Validation_Einzugsgebiete\\Validation_Einzugsgebiete.shp"#
-
+#"data/Entsorgungsgebiete_gesamt.gpkg"
 
 # finds factor to scale results for validation regions crossing border of Upper Danube Basin
 if (validation_region){
@@ -97,10 +97,10 @@ if (validation_region){
 
 
 # Processed data names -----------------------------------------------------------------------------------------------------------
-filenam_prec_data_base <- paste0("precipitation_ts_AUT_WWTP") # the year is added in file 04
-filenam_imp_data <- ifelse(time_period_of_interest == "2010_2016", "impervious_area_2015_AUT_WWTP.rds", "impervious_area_2021_AUT_WWTP.rds")
-filenam_cs_data <- "share_CS_wwtp.rds"
-filenam_pop_data <- ifelse(time_period_of_interest == "2010_2016", "population_2015_AUT_WWTP.rds", "population_2021_AUT_WWTP.rds")
+filenam_prec_data_base <- paste0("precipitation_ts_AUT_FUA") # the year is added in file 04
+filenam_imp_data <- ifelse(time_period_of_interest == "2010_2016", "impervious_area_2015_AUT_FUA.rds", "impervious_area_2021_AUT_FUA.rds")
+filenam_cs_data <- "share_CS_AUT_FUA.rds"
+filenam_pop_data <- ifelse(time_period_of_interest == "2010_2016", "population_2015_AUT_FUA.rds", "population_2021_AUT_FUA.rds")
 # else population_2021.rds and impervious_area_2021_AUT etc.
 
 
@@ -146,12 +146,12 @@ dwf_per_capita <- 0.2
 
 if (!validation_region){ # for validation regions: Cs share and population from data shared and Emreg
     manual_pop <- FALSE #FALSE#19640#88361 # specify number of connected inhabitants or set to FALSE to use Eurostat population data
-    manual_CS <- FALSE #0.86 # specify the CS share or set to FALSE to extract from CS share data
+    manual_CS <- 0.28 #0.86 # specify the CS share or set to FALSE to extract from CS share data
 }
 
 
 # Data processing / calling -------------------------------------------------------------------------------------------------------
-settlements_id <- "NAME"
+settlements_id <- "fua_name"
 
 if (already_processed){
     urb_4326 <- vect("data/settlements_cropped_epsg4326.gpkg")
@@ -180,6 +180,11 @@ if (already_processed){
 
 
 
+
+urb_3035 <- urb_3035[values(urb_3035)$country == "AT"]
+
+
+
 # AoI  ---------------------------------------------------------------------------------------------------------------------------
 if (!validation_region){
     aoi <- vect(area_of_interest)
@@ -194,7 +199,7 @@ if (!validation_region){
 
 
     # for the Entsorgungsgebiete dataset
-    add_number <- c(1:length(urb_3035_cropped_to_aoi))
+    #add_number <- c(1:length(urb_3035_cropped_to_aoi))
     unique_gridcodes <- as.vector(unlist(unique(values(urb_3035_cropped_to_aoi[gridcode_nam]))))
     gridcode_in_aoi <- unique_gridcodes # paste(add_number, unlist(values(urb_3035_cropped_to_aoi[gridcode_nam])), sep = "_")
     # the number add-on was needed for the preprocessing to consider the "Anteil" dataset correctly

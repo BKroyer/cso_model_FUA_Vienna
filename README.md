@@ -27,12 +27,12 @@ If the model output shall be validated against measurement data, there is the op
 Here is an overview of the project structure including short descriptions of the purpose of each file:
 
 - **cso-modell-upper-danube/**
-	- **cache/** _Runs every time, can store data (paths) temporarily_
 	- **config/** _Runs every time_
 		- **global.dcf** _Project settings and which libraries to load_
 	- **data/** _Input data such as precipitation, imperviousness and CS share_
 	- **data_NOTREAD/** _Stores/saves intermediate results and preprocessed data_
 	- **lib/** _Runs every time_
+		- **cache/** _Runs every time, can store data (paths) temporarily_
 		- **cso_model_helpers.cpp** _The translations to C++_
 		- **cso_run_on_single_grid.R** _Helper function to parallelize gridcodes in cso model_
 		- **model_cso.R** _Contains the main model function cso_model_

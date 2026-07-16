@@ -29,7 +29,7 @@ Here is an overview of the project structure including short descriptions of the
 - **cso-modell-upper-danube/**
 	- **cache/** _Runs every time, can store data (paths) temporarily_
 	- **config/** _Runs every time_
-		- global.dcf _Project settings and which libraries to load_
+		- **global.dcf** _Project settings and which libraries to load_
 	- **data/** _Input data such as precipitation, imperviousness and CS share_
 	- **data_NOTREAD/** _Stores/saves intermediate results and preprocessed data_
 	- **lib/** _Runs every time_

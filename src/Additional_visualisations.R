@@ -320,46 +320,6 @@ print(bias_plot)
 dev.off()
 
 
-# bias plot for the Entsorgungsgebiete ## delete for github!
-val_data <- setDT(read.xlsx("data/Validation_data.xlsx"))
-val_data <- val_data[, .(NAME, Value, Code)]
-setnames(val_data, "gridcode", "NAME", skip_absent = T)
-
-
-res_data <- setDT(read.xlsx("data_NOTREAD/intermediate_results/Entsorgungsgebiete_Eurostat_manualCS_HEF_manualpop_2021_2022_2023_2024_Jun24.xlsx", sheet = "results_per_gridcode"))
-res_data <- res_data[, c("year", "total_overflow_Mm3y", "gridcode")]
-res_data$gridcode[res_data$gridcode == "ebswien kläranlage & tierservice"] <- "Wien Kanal"
-# combine ARA Pulkau and ARA Schrattenthal for the validation data
-temp <- res_data[gridcode == "ARA Pulkau" | gridcode == "ARA Schrattenthal",
-         .(total_overflow_Mm3y = sum(total_overflow_Mm3y)), by = year]
-temp$gridcode <- "Gemeindeabwasserverband- Pulkau-Schrattenthal-Pillersdorf"
-res_data <- rbind(res_data, temp)
-res_data <- res_data[year < 2024]
-res_data <- res_data[, .(total_overflow_Mm3y = mean(total_overflow_Mm3y)), by = gridcode]
-
-plot_data <- merge(val_data, res_data, by.x = "NAME", by.y = "gridcode")
-plot_data[, bias := (total_overflow_Mm3y * 10^6 - Value) / Value * 100]
-
-bias_plot <- ggplot(plot_data, aes(x = Code, y = bias)) +#, color = year
-    geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
-    geom_segment(aes(x = Code, xend = Code, y = 0, yend = bias),
-                 color = "grey50") +
-    geom_point(size = 3) + #, alpha = 0.7
-    scale_y_continuous(limits = c(-100,100), breaks = seq(-100, 100, #seq(floor(min(plot_data$bias)/20)*20,
-                                    #ceiling(max(plot_data$bias)/20)*20,
-                                    by = 10),
-                       labels = function(x) paste0(x, "%")) +
-    labs(y = "Bias to validation value (%)", x = "Gridcode") + #, color = ""
-    theme_bw()# +
-    #theme(axis.text.x = element_text(angle = 90, vjust = 0.7))
-#bias_plot
-
-#pdf("bias_Entsorgung_EUROSTAT_wo2024_extracted_CS.pdf", width = 9, height = 10)
-pdf("bias_Entsorgung_EUROSTAT_wo2024_manual_CS_MEAN_woHEF_EW_125_to100.pdf", width = 7, height = 4)
-print(bias_plot)
-dev.off()
-
-
 
 # events plots -----------------------------------------------------------------
 res_event <- setDT(read.xlsx(path_out, sheet = "event_metrics_yearly"))

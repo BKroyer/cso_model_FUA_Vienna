@@ -21,6 +21,12 @@ path_cropped_nc <- file.path(path_input, "nc_cropped_AUT") # for the precipitati
 path_design_population <- NA # either the path to the data with gridcodes or NA
 # if design population is given, adjust dn and dt to match design population
 
+# Paths to preprocessed data
+filenam_prec_data_base <- paste0("precipitation_ts_AUT_WWTP") # the year is added in file 04
+filenam_imp_data <- ifelse(time_period_of_interest == "2010_2016", "impervious_area_2015_AUT_FUA.rds", "impervious_area_2021_AUT_WWTP.rds")
+filenam_cs_data <- "share_CS_wwtp.rds"
+filenam_pop_data <- ifelse(time_period_of_interest == "2010_2016", "population_2015_AUT.rds", "population_2021_AUT_WWTP.rds")
+
 
 # Time period of interest (Used in precipitation data extraction & mask when applying model) -------------------------------------
 
@@ -79,13 +85,6 @@ if (validation_region){
 }else{
     factor_enlarge_validation <- 1
 }
-
-
-# Processed data names -----------------------------------------------------------------------------------------------------------
-filenam_prec_data_base <- paste0("precipitation_ts_AUT_WWTP") # the year is added in file 04
-filenam_imp_data <- ifelse(time_period_of_interest == "2010_2016", "impervious_area_2015_AUT_FUA.rds", "impervious_area_2021_AUT_WWTP.rds")
-filenam_cs_data <- "share_CS_wwtp.rds"
-filenam_pop_data <- ifelse(time_period_of_interest == "2010_2016", "population_2015_AUT.rds", "population_2021_AUT_WWTP.rds")
 
 
 # Gridcode specification (NULL to process all within AoI, else vector of gridcodes to process) -----------------------------------

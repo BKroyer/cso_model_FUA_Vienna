@@ -29,13 +29,6 @@ extract_prec_year <- function(path, year_str, nc_files_cropped, nr_timesteps = 8
 }
 
 
-
-
-# Validation Einzugsgebiete
-#val_einzug <- vect("C:\\Users\\simulation\\bkroyer\\git_clone\\cso-modell-upper-danube\\data\\Validation_Einzugsgebiete\\Validation_Einzugsgebiete.shp")
-#val_4326 <- project(val_einzug, urb_4326)
-
-
 # loop to save extracted prec time series as rds for every specified year separately
 for (current_years in as.character(c(2022:2024))){
     nc_files_yr <- extract_prec_year(path_cropped_nc, current_years, nc_files_cropped)
@@ -50,15 +43,6 @@ for (current_years in as.character(c(2022:2024))){
     terra::gdalCache(30000)
 
     precip_urb <- exact_extract(precip_rast, sf::st_as_sf(urb_4326), fun = "mean", append_cols = gridcode_nam, stack_apply = TRUE) # prec data in in EPSG:4326
-
-    #urb_4326 <- urb_4326[values(urb_4326)$country == "AT"]
-    #precip_urb[gridcode_nam] <- gridcode_to_process
-
-    #precip_urb <- merge(precip_urb, anteil, by.x = "NAME", by.y = "settlement_id")
-
-
-    # for the validation regions
-    #precip_urb <- exact_extract(precip_rast, sf::st_as_sf(val_4326), fun = "mean", append_cols = settlements_id, stack_apply = TRUE) # prec data in in EPSG:4326
 
     # alternative with terra function. Less precise and very slow.
     # precip_urb <- extract(precip_rast, urb, fun = mean, ID = TRUE, na.rm = TRUE)
@@ -76,23 +60,11 @@ for (current_years in as.character(c(2022:2024))){
     )
 
     precip_long[, timestamp := sub("^mean\\.", "", mean_var)]
-    #precip_long[, weighted_precip := precipitation_mm * Anteil]
-    # result <- precip_long[
-    #     , .(precipitation_mm = sum(precipitation_mm * Anteil, na.rm = TRUE) / sum(Anteil, na.rm = TRUE)),
-    #     by = .(NAME_nr = get("NAME.x"), timestamp)
-    # ]
-    # precip_dt <- result
-    # names(precip_dt)[1] <- c("NAME")
 
     precip_dt <- precip_long[, mean_var := NULL]
 
-    #precip_dt <- melt(precip_urb, id.vars = settlements_id, value.name = "precipitation_mm")
-    # saveRDS(precip_dt,"data/intermediate_results/precipitation_ts_settlements_prelim.rds")
-    # rm(precip_urb)
-    # gc()
     setkeyv(precip_dt, gridcode_nam)
     settlement_ids <- unique(precip_dt[,..gridcode_nam])
-    #precip_dt[, time:=as.POSIXct(variable, format = "mean.%Y%j.%H"), by = gridcode]
     precip_dt[, time:=as.POSIXct(timestamp, format = "%Y%j.%H"), by = gridcode_nam]
 
     precip_dt[, timestamp:=NULL]

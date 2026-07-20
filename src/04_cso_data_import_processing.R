@@ -27,9 +27,9 @@ if (!validation_region){
     # Import population data
     pop_dt <- readRDS(file.path(path_input, filenam_pop_data))
 
-    setDT(pop_dt, key = "settlement_id")
+    setDT(pop_dt, key = gridcode_nam)
     pop_dt <- pop_dt[.(gridcode_to_process)]
-    setkey(pop_dt, settlement_id)
+    setkeyv(pop_dt, gridcode_nam)
     pop_dt[, population := as.numeric(population)]#as.integer(population)]
     pop_dt[is.na(population), population := 0] # one cropped settlement had NA as population
 
@@ -37,25 +37,24 @@ if (!validation_region){
 
 
     # change pop to validation data
-    # val_data <- setDT(read.xlsx("data/Validation_data.xlsx"))
-    # val_data$NAME[val_data$NAME == "Wien Kanal"] <- "ebswien kläranlage & tierservice"
-    # duplrow <- val_data[1]
-    # duplrow$NAME <- "ARA Pulkau"
-    # val_data[1, NAME := "ARA Schrattenthal"]
-    # val_data <- rbind(val_data, duplrow)
-    # setnames(val_data, "NAME", "settlement_id")
-    #
-    # pop_dt[val_data, population := i.EW, on = "settlement_id"] # i.EW or i.Pop2018_2023
-    # setnames(val_data, "settlement_id", "gridcode")
+    val_data <- setDT(read.xlsx("data/Validation_data.xlsx"))
+    val_data$NAME[val_data$NAME == "Wien Kanal"] <- "ebswien kläranlage & tierservice"
+    duplrow <- val_data[1]
+    duplrow$NAME <- "ARA Pulkau"
+    val_data[1, NAME := "ARA Schrattenthal"]
+    val_data <- rbind(val_data, duplrow)
+    setnames(val_data, "NAME", "settlement_id")
+
+    pop_dt[val_data, population := i.EW, on = "settlement_id"] # i.EW or i.Pop2018_2023
+    setnames(val_data, "settlement_id", "gridcode")
 
     # get the design population data
     if (!is.na(path_design_population)) { # use the design population and utilisation rate
         design_pop_dt <- read.xlsx(path_design_population)
         setDT(design_pop_dt)
-        setnames(design_pop_dt, gridcode_nam, "settlement_id")
 
         # if no design population is found, use the EUROSTAT population
-        design_pop_dt <- design_pop_dt[is.na(Bemessungswert), Bemessungswert := pop_dt[.SD, on = "settlement_id", x.population]]
+        design_pop_dt <- design_pop_dt[is.na(Bemessungswert), Bemessungswert := pop_dt[.SD, on = get(gridcode_nam), x.population]]
 
     } else {
         design_pop_dt <- NA
@@ -65,24 +64,29 @@ if (!validation_region){
     # Import impervious area data
     imp_dt <- readRDS(file.path(path_input, filenam_imp_data))
 
-    setDT(imp_dt, key = "settlement_id")
+    setDT(imp_dt, key =  gridcode_nam)
     imp_dt <- imp_dt[.(gridcode_to_process)]
-    setkey(imp_dt, settlement_id)
+    if (any(is.na(imp_dt$imp_area_km2))){
+        imp_dt$imp_area_km2[is.na(imp_dt$imp_area_km2)] <- 0
+        warning("some imperviousness values were NA, set to 0")
+    }
+    setkeyv(imp_dt, gridcode_nam)
 
 
     # Import share served by CS
     share_dt <- readRDS(file.path(path_input, filenam_cs_data))
-    names(share_dt)[1] <- "gridcode"
-    setDT(share_dt, key = "gridcode")
+
+    setDT(share_dt, key = gridcode_nam)
     share_dt <- share_dt[.(gridcode_to_process)]
-    setkey(share_dt, gridcode)
+    setkeyv(share_dt, gridcode_nam)
     share_dt[share_served_by_CS>1, share_served_by_CS := share_served_by_CS/100]
 
 
     # change CS share to validation data
     # but not for ... E, F ,J ?
-    #val_data <- val_data[!(Code %in% c("H", "E", "F"))]
-    #share_dt[val_data, share_served_by_CS := i.CS, on = "gridcode"]
+    val_data <- val_data[!(Code %in% c("H", "E", "F"))]
+    setnames(val_data, "gridcode", gridcode_nam)
+    share_dt[val_data, share_served_by_CS := i.CS, on = gridcode_nam]
 
 
 
@@ -98,18 +102,20 @@ if (!validation_region){
         if (!manual_pop){
             manual_pop <- readline(prompt = "Specify number of people connected to the WWTP: ")
         }
-        pop_dt <- data.table(settlement_id = gridcode_to_process, population = manual_pop)
+        pop_dt <- data.table(gridcode_to_process, manual_pop)
+        setnames(pop_dt, c(gridcode_nam, "population"))
     }else{
         if(time_period_of_interest == "2021_2024"){
-            pop_dt <- data.table(settlement_id = gridcode_to_process, population = manual_pop) # using the specified mean pop from 2018-2023
+            pop_dt <- data.table(gridcode_to_process, manual_pop) # using the specified mean pop from 2018-2023
+            setnames(pop_dt, c(gridcode_nam, "population"))
             #pop_dt <- readRDS(file.path(path_input, "population_2021_validation_einzugsgebiete.rds"))
         }else{
             errorCondition("use either 2010_2016 or 2021_2024 as time_period_of_interest")
         }
     }
-    setDT(pop_dt, key = "settlement_id")
+    setDT(pop_dt, key = gridcode_nam)
     pop_dt <- pop_dt[.(gridcode_to_process)]
-    setkey(pop_dt, settlement_id)
+    setkey(pop_dt, gridcode_nam)
     pop_dt[, population := as.numeric(population)]#as.integer(population)]
     pop_dt[is.na(population), population := 0] # one cropped settlement had NA as population
 
@@ -126,17 +132,18 @@ if (!validation_region){
             errorCondition("use either 2010_2016 or 2021_2024 as time_period_of_interest")
         }
     }
-    setDT(imp_dt, key = "settlement_id")
+    setDT(imp_dt, key = gridcode_nam)
     imp_dt <- imp_dt[.(gridcode_to_process)]
-    setkey(imp_dt, settlement_id)
+    setkey(imp_dt, gridcode_nam)
+    imp_dt$imp_area_km2[is.na(imp_dt$imp_area_km2)] <- 0
 
 
     # Import share served by CS
     # share_dt <- data.table(gridcode = unique(prec_dt$gridcode), share_served_by_CS = rep(0.28, length(gridcode_to_process)), key = "gridcode")
     share_dt <- readRDS(file.path(path_input, "share_CS_validation_einzugsgebiete.rds"))
-    setDT(share_dt, key = "gridcode")
+    setDT(share_dt, key = gridcode_nam)
     share_dt <- share_dt[.(gridcode_to_process)]
-    setkey(share_dt, gridcode)
+    setkey(share_dt, gridcode_nam)
     share_dt[share_served_by_CS>1, share_served_by_CS := share_served_by_CS/100]
 
     # custom CS share
@@ -145,6 +152,48 @@ if (!validation_region){
         print(paste0("Warning: Manual CS of ", manual_CS," is used!"))
     }
 }
+
+# ## added mean stats for paper
+# urb_df <- data.frame(values(urb_3035)[gridcode_nam], expanse(urb_3035, unit = "km"))
+# setnames(urb_df, c(gridcode_nam, "area"))
+# urb_df$weight <- urb_df$area/sum(urb_df$area)
+#
+# urb_df <- merge(urb_df, imp_dt, by = gridcode_nam)
+# urb_df <- merge(urb_df, share_dt, by = gridcode_nam)
+#
+# urb_df$factor_imp <- urb_df$imp_area_km2/urb_df$area
+#
+# years <- 2021:2024
+# prec_data <- list()
+#
+# for (year in years) {
+#     year_temp <- as.character(year)
+#     file_path <- file.path(
+#         path_input,
+#         paste0(filenam_prec_data_base, year_temp, ".rds"))
+#     prec_yr <- readRDS(file_path)
+#     setDT(prec_yr)
+#     prec_yr <- prec_yr[, .(annual_prec = sum(precipitation_mm)), by = mget(gridcode_nam)]
+#     setnames(prec_yr, "annual_prec", paste0("prec_", year))
+#     prec_data[[year_temp]] <- prec_yr
+# }
+# prec_all <- Reduce(function(x, y) merge(x, y, by = gridcode_nam, all = TRUE), prec_data)
+#
+# urb_df <- merge(urb_df, prec_all)
+#
+# # weight by imp area per year (and not per year for static)
+# urb_df$weighted_imp <- urb_df$factor_imp * urb_df$weight
+# sum(urb_df$weighted_imp) # smaller settlements: 14% imp, 1523 total; FUA: 4.4% imp, 930 total, WWTP: 2.7% imp, 1937 total
+# urb_df$weighted_share <- urb_df$share_served_by_CS * urb_df$weight
+# sum(urb_df$weighted_share) # smaller settlements: 0.36 share; FUA: 0.41; WWTP: 0.35
+# for (year in years) {
+#     col_name <- paste0("prec_", year)
+#     urb_df[[col_name]] <- urb_df[[col_name]] * urb_df$weight
+#     print(sum(urb_df[[col_name]]))
+#     # smaller settlements: 935.3302, 876.2439, 1178.634, 1115.335 --> mean: 1026
+#     # FUAs: 801.0459, 750.744, 1019.758, 970.1179 --> mean: 885
+#     # WWTPs: 997.0578, 928.9637, 1254.07, 1183.379 --> mean: 1090.868
+# }
 
 rm(urb_3035, urb_3035_cropped_to_aoi, urb_4326, aoi_3035, aoi_buffered_epsg4326, aoi_epsg3035)
 
@@ -179,7 +228,7 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
 
     # fill workbook for all years
 
-    # read validation_einzugsgebiete if validation_region!!!
+    # reads validation_einzugsgebiete if validation_region!!!
 
     summary_overflow_all_years <- NULL
 
@@ -209,8 +258,8 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
         names(prec_dt_year)[1] <- "gridcode"
 
         setkey(prec_dt_year, gridcode, time)
-        prec_dt_year <- prec_dt_year[ data.table(gridcode = unique(gridcode_to_process)), on = .(gridcode) ]#[time >= date_begin &
-        # time <= date_end] #option to filter by time again, only relevant if not entire years are used
+        prec_dt_year <- prec_dt_year[ data.table(gridcode = unique(gridcode_to_process)), on = .(gridcode) ][time >= date_begin &
+        time <= date_end] #option to filter by time again, only relevant if not entire years are used
 
         prec_dt_year$time <- as.POSIXct( # fix the time format (CET/CEST because of summer time, but I need the physical time)
             format(prec_dt_year$time, "%Y-%m-%d %H:%M:%S"),
@@ -218,8 +267,6 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
         )
 
         prec_dt_year$precipitation_mm <- prec_dt_year$precipitation_mm * params_temp$factor_enlarge_prec
-
-        print(paste0("The mean annual prec (year ",year_temp,") is: ", sum(prec_dt_year$precipitation_mm)/(length(prec_dt_year$time)/8/365), " mm"))
         gc()
 
         # apply cso_model to gridcodes_to_process (real data) ---------------------------------------------------------------------------------------
@@ -249,9 +296,6 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
 
         rm(prec_dt_year)
 
-        #runtime_dt <- rbindlist(lapply(mod_results, function(x) data.table(gridcode = x$gridcode, runtime_secs = x$runtime_secs)))
-
-        # dt_results and dt_events need separate saving else memory error when processing AoI
 
         # parameters ---------------------------------------------------
         dt_params <- rbindlist(
@@ -379,9 +423,8 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
         }
 
         print(paste0("The total overflow is ", summarized_stats$total_overflow_Mm3y, " Mm³"))
-        # print(runtime_dt)
 
-        rm(dt_results) # free memory
+        rm(dt_results)
         gc()
 
 
@@ -423,7 +466,6 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
         )]
 
         event_metrics <- cbind(data.table(year = year_temp), event_metrics)
-
 
         if (year_temp == current_years[1]){ # only needed once
 
@@ -494,7 +536,7 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
 
         }
 
-        rm(dt_event) # free memory
+        rm(dt_event)
         gc()
 
 

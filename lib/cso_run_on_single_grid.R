@@ -19,26 +19,26 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
 
 
     # extract single rows
-    share <- share_dt[gridcode == gridcode_temp]
+    share <- share_dt[get(gridcode_nam) == gridcode_temp]
 
 
     p     <- params[gridcode == gridcode_temp]
 
     if (!manual_pop){
-        pop <- as.numeric(pop_dt[settlement_id  == gridcode_temp]$population * share$share_served_by_CS) # the population actually discharging into the combined sewer system!
+        pop <- as.numeric(pop_dt[get(gridcode_nam)  == gridcode_temp]$population * share$share_served_by_CS) # the population actually discharging into the combined sewer system!
         #print(pop)
     } else{
         pop <- as.numeric(manual_pop)
     }
 
     if (any(!is.na(design_pop_dt))){
-        design_pop <- as.numeric(design_pop_dt[settlement_id  == gridcode_temp]$Bemessungswert * share$share_served_by_CS) # designed for ALL people so also from SS
+        design_pop <- as.numeric(design_pop_dt[get(gridcode_nam)  == gridcode_temp]$Bemessungswert * share$share_served_by_CS) # designed for ALL people so also from SS
     }else{
         design_pop <- NA
     }
 
 
-    imp   <- imp_dt[settlement_id  == gridcode_temp]
+    imp   <- imp_dt[get(gridcode_nam)  == gridcode_temp]
 
 
     # precipitation time series

@@ -49,10 +49,10 @@ for (current_years in as.character(c(2022:2024))){
     # extract the precipitation for all settlements:
     terra::gdalCache(30000)
 
-    precip_urb <- exact_extract(precip_rast, sf::st_as_sf(urb_4326), fun = "mean", append_cols = settlements_id, stack_apply = TRUE) # prec data in in EPSG:4326
+    precip_urb <- exact_extract(precip_rast, sf::st_as_sf(urb_4326), fun = "mean", append_cols = gridcode_nam, stack_apply = TRUE) # prec data in in EPSG:4326
 
     #urb_4326 <- urb_4326[values(urb_4326)$country == "AT"]
-    precip_urb[gridcode_nam] <- gridcode_to_process
+    #precip_urb[gridcode_nam] <- gridcode_to_process
 
     #precip_urb <- merge(precip_urb, anteil, by.x = "NAME", by.y = "settlement_id")
 
@@ -90,22 +90,18 @@ for (current_years in as.character(c(2022:2024))){
     # saveRDS(precip_dt,"data/intermediate_results/precipitation_ts_settlements_prelim.rds")
     # rm(precip_urb)
     # gc()
-    setkeyv(precip_dt, settlements_id)
-    settlement_ids <- unique(precip_dt[,..settlements_id])
+    setkeyv(precip_dt, gridcode_nam)
+    settlement_ids <- unique(precip_dt[,..gridcode_nam])
     #precip_dt[, time:=as.POSIXct(variable, format = "mean.%Y%j.%H"), by = gridcode]
-    precip_dt[, time:=as.POSIXct(timestamp, format = "%Y%j.%H"), by = settlements_id]
+    precip_dt[, time:=as.POSIXct(timestamp, format = "%Y%j.%H"), by = gridcode_nam]
 
     precip_dt[, timestamp:=NULL]
 
     # Save data table as RDS as this saves much space
     #saveRDS(precip_dt, file.path(path_intermediate_res, paste0("precipitation_ts_settlements_", current_years,".rds")))
 
-    # aggregate according to Anteil
-
 
     saveRDS(precip_dt, file.path(path_intermediate_res, paste0("precipitation_ts_AUT_FUA", current_years,".rds")))
-    # remove preliminary data
-    # file.remove("data/intermediate_results/precipitation_ts_settlements_prelim.rds")
 
 }
 

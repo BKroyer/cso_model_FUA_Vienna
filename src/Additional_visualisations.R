@@ -2,6 +2,8 @@
 # by Bettina Kroyer
 
 
+# overview precipitation plots -------------------------------------------------
+
 dim(prec_dt)
 
 prec_dt[, date := as.Date(time)]
@@ -47,24 +49,10 @@ p2
 
 
 
-
-
-
-
-# annual precipitation for AoI over 2010 - 2024
-
-# area_aoi <- sum(expanse(aoi_3035, unit = "km")) #km²
-# area_austria <- 83883.87 #km²
+# annual precipitation for AoI over 2010 - 2024 --------------------------------
 
 area_gridcodes <- data.table(gridcode = urb_3035$gridcode, area_gridcode = expanse(urb_3035, unit = "km"))
 area_gridcodes[, weight := area_gridcode/sum(area_gridcode)]
-
-#library(sf)
-#area_gridcodes <- data.table(
-#    gridcode = urb_3035$gridcode,
-#    area_km2  = as.numeric(st_area(urb_3035)) / 1e6
-#)
-#area_gridcodes[, weight := area_km2 / sum(area_km2)]
 
 setkey(area_gridcodes, gridcode)
 
@@ -103,6 +91,7 @@ dev.off()
 
 
 
+# results plot per validation region -------------------------------------------
 library(gridExtra)
 validation_plot <- function(validation_region){
 
@@ -130,19 +119,43 @@ validation_plot <- function(validation_region){
 
     dat_temp <- data.table(cso = cso_col, prec = prec_col, time = time_temp, dwf = dwf_col)
 
+
+
+    # plotting settlement types next to each other
+    dat_temp$settlement_type <- "WWTP catchments"
+
+    res_cso <- setDT(read.xlsx("data_NOTREAD/intermediate_results/AUT_FUA_rep_2021_2022_2023_2024_Jul17.xlsx", sheet = "overflow_yearly"))
+    cso_col <- c(res_cso[metric == "total [Mm3y]", model]) *10^6 * factor_enlarge_validation
+    dwf_col <- c(res_cso[metric == "DWF volume [Mm3]", model]) *10^6 * factor_enlarge_validation
+    dat_temp2 <- data.table(cso = cso_col, prec = prec_col, time = time_temp, dwf = dwf_col)
+    dat_temp2$settlement_type <- "FUAs"
+
+    res_cso <- setDT(read.xlsx("data_NOTREAD/intermediate_results/AUT_rep_2021_2022_2023_2024_Jul17.xlsx", sheet = "overflow_yearly"))
+    cso_col <- c(res_cso[metric == "total [Mm3y]", model]) *10^6 * factor_enlarge_validation
+    dwf_col <- c(res_cso[metric == "DWF volume [Mm3]", model]) *10^6 * factor_enlarge_validation
+    dat_temp3 <- data.table(cso = cso_col, prec = prec_col, time = time_temp, dwf = dwf_col)
+    dat_temp3$settlement_type <- "Smaller settlements"
+
+    dat_temp <- rbind(dat_temp, dat_temp2, dat_temp3)
+    ###
+
+
+
+
+
     if (validation_region){
         p_wo_text <- ggplot(data = dat_temp, aes(x = time, y = cso)) +
             theme_bw() +
             geom_col(fill = "darkolivegreen3", width = 0.5, alpha = 0.9)+#, linewidth = 2) +
-            geom_point(aes(color = "Modeled CSO volume"), size = 4, shape = 21, fill = "grey30", stroke = 2) +
+            geom_point(aes(color = "Modelled CSO volume"), size = 4, shape = 21, fill = "grey30", stroke = 2) +
             geom_hline(aes(yintercept = val_dat, color = "Validation data: CSO volume"), linewidth = 1.5, linetype = "solid", alpha = 0.9) + #, color = "lightpink"
-            geom_hline(aes(yintercept = mean(cso),  color = "Modeled mean annual CSO volume"), linewidth = 1.5, linetype = "dashed", alpha = 0.9) +
-            geom_col(aes(y = dwf, color = "Modeled DWF content"), width = 0.48, fill = "brown4", alpha = 0.3, linewidth = 0.0000001) +
+            geom_hline(aes(yintercept = mean(cso),  color = "Modelled mean annual CSO volume"), linewidth = 1.5, linetype = "dashed", alpha = 0.9) +
+            geom_col(aes(y = dwf, color = "Modelled DWF content"), width = 0.48, fill = "brown4", alpha = 0.3, linewidth = 0.0000001) +
 
-            scale_color_manual(values = c("Modeled CSO volume" = "darkolivegreen3",
+            scale_color_manual(values = c("Modelled CSO volume" = "darkolivegreen3",
                                           "Validation data: CSO volume" = "pink3",
-                                          "Modeled mean annual CSO volume" = "darkolivegreen",
-                                          "Modeled DWF content" = "brown4")) +
+                                          "Modelled mean annual CSO volume" = "darkolivegreen",
+                                          "Modelled DWF content" = "brown4")) +
 
 
             ylab("CSO volume [m³ per year]") +
@@ -152,26 +165,54 @@ validation_plot <- function(validation_region){
             scale_x_continuous(breaks = seq(yr_begin, yr_end), limits = c(yr_begin-0.3, yr_end+0.3), expand = c(0,0))+
             scale_y_continuous(labels = scales::number_format(accuracy = 1))
     }else{
-        p_wo_text <- ggplot(data = dat_temp, aes(x = time, y = cso)) +
+    #     p_wo_text <- ggplot(data = dat_temp, aes(x = time, y = cso)) +
+    #         theme_bw() +
+    #         geom_col(fill = "darkolivegreen3", width = 0.5, alpha = 0.9)+#, linewidth = 2) +
+    #         geom_point(aes(color = "Modeled CSO volume"), size = 4, shape = 21, fill = "grey30", stroke = 2) +
+    #         geom_hline(aes(yintercept = mean(cso),  color = "Modeled mean annual CSO volume"), linewidth = 1.5, linetype = "dashed", alpha = 0.9) +
+    #         geom_col(aes(y = dwf, color = "Modeled DWF content"), width = 0.48, fill = "brown4", alpha = 0.3, linewidth = 0.0000001) +
+    #
+    #         scale_color_manual(values = c("Modeled CSO volume" = "darkolivegreen3",
+    #                                       "Modeled mean annual CSO volume" = "darkolivegreen",
+    #                                       "Modeled DWF content" = "brown4")) +
+    #
+    #
+    #         ylab("CSO volume [m³ per year]") +
+    #         xlab("") +
+    #         labs(shape = "", color = "") +
+    #         theme(legend.position = "top") +
+    #         scale_x_continuous(breaks = seq(yr_begin, yr_end), limits = c(yr_begin-0.3, yr_end+0.3), expand = c(0,0))+
+    #         scale_y_continuous(labels = scales::number_format(accuracy = 1))
+    # }
+
+    # settlements types
+    p_wo_text <- ggplot(data = dat_temp, aes(x = time, y = cso/10^6, fill = settlement_type)) +
             theme_bw() +
-            geom_col(fill = "darkolivegreen3", width = 0.5, alpha = 0.9)+#, linewidth = 2) +
-            geom_point(aes(color = "Modeled CSO volume"), size = 4, shape = 21, fill = "grey30", stroke = 2) +
-            #geom_hline(aes(yintercept = val_dat, color = "Validation data: CSO volume"), linewidth = 1.5, linetype = "solid", alpha = 0.9) + #, color = "lightpink"
-            geom_hline(aes(yintercept = mean(cso),  color = "Modeled mean annual CSO volume"), linewidth = 1.5, linetype = "dashed", alpha = 0.9) +
-            geom_col(aes(y = dwf, color = "Modeled DWF content"), width = 0.48, fill = "brown4", alpha = 0.3, linewidth = 0.0000001) +
+            geom_col(position = "dodge", width = 0.7, alpha = 0.9)+#, linewidth = 2) + fill = "darkolivegreen3",
+            geom_point(aes(shape = "Modelled CSO volume", color = settlement_type), fill = "grey30", stroke = 2, size = 4,
+                       position = position_dodge(width = 0.7)) +
+            geom_col(aes(y = dwf/10^6, color = "Modelled DWF content"), width = 0.68, alpha = 0.3, linewidth = 0.6, position = "dodge") +
 
-            scale_color_manual(values = c("Modeled CSO volume" = "darkolivegreen3",
-                                          #"Validation data: CSO volume" = "pink3",
-                                          "Modeled mean annual CSO volume" = "darkolivegreen",
-                                          "Modeled DWF content" = "brown4")) +
+            scale_fill_manual(values = c("WWTP catchments" = "#A6D854", #"darkolivegreen3",
+                                     "FUAs" = "#FFC20E",
+                                     "Smaller settlements" = "lightpink")) +
+
+            scale_color_manual(values = c("Modelled DWF content" = "brown4"),
+                               guide = guide_legend(override.aes = list(fill = "white"))) +
+
+            scale_shape_manual(values = c("Modelled CSO volume" = 21),
+                               guide = guide_legend(override.aes = list(fill = "grey30", color = "grey60"))) +
+            # scale_size_manual(values = c("WWTP catchments" = 4,
+            #                              "FUAs" = 4,
+            #                              "Smaller settlements" = 4)) +
 
 
-            ylab("CSO volume [m³ per year]") +
+            ylab("CSO volume [Mm³ per year]") +
             xlab("") +
-            labs(shape = "", color = "") +
+            labs(color = "", fill = "", shape = "") +
             theme(legend.position = "top") +
-            scale_x_continuous(breaks = seq(yr_begin, yr_end), limits = c(yr_begin-0.3, yr_end+0.3), expand = c(0,0))+
-            scale_y_continuous(labels = scales::number_format(accuracy = 1))
+            scale_x_continuous(breaks = seq(yr_begin, yr_end), limits = c(yr_begin-0.5, yr_end+0.5), expand = c(0,0))+
+            scale_y_continuous(breaks = seq(0,200,25), labels = scales::number_format(accuracy = 1), minor_breaks = F)
     }
 
 
@@ -207,8 +248,6 @@ validation_plot <- function(validation_region){
         labs(x = "", y = "Precipitation [mm]")
 
     pdf(file.path(path_intermediate_res, paste0(area_of_interest_name, "_resultsplot.pdf")), width = 9.2, height = 6.5)
-    #pdf(file.path(path_intermediate_res, paste0("Traisen_reduced_default_params", "_resultsplot.pdf")), width = 9.2, height = 6.5)
-    #full_plot <- grid.arrange(p_wo_text, param_plot, prec_add, empty_plot, nrow = 2, heights = c(2, 1.3), widths = c(2,0.3))
 
 
     full_plot <-grid.arrange(grobs = list(p_wo_text, param_plot, validation_annotation, prec_add, empty_plot),
@@ -223,12 +262,11 @@ validation_plot <- function(validation_region){
 }
 
 validation_plot(validation_region = validation_region)
-#validation_plot(validation_region = TRUE)
 
 
 
 
-
+# bias plot --------------------------------------------------------------------
 # plot showing all validation regions results as offset from validation value in per cent (middle line: 1: perfect match)
 file_list <- list.files(path_intermediate_res, pattern = paste0(datum, "\\.xlsx$"), full.names = TRUE)
 val_files <- file_list[grepl(paste0("^[A-Z]_", datum, "\\.xlsx$"), basename(file_list))]
@@ -264,11 +302,6 @@ for (val_file in val_files){
 
 val_dt[, bias := (cso_val - val_value) / val_value * 100]
 
-
-#library(scales)
-
-#val_dt$gridcode <- factor(val_dt$gridcode, levels = val_dt$gridcode)
-
 bias_plot <- ggplot(val_dt, aes(x = gridcode, y = bias, color = year)) +#, color = year
     geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
     geom_segment(aes(x = gridcode, xend = gridcode, y = 0, yend = bias),
@@ -287,29 +320,24 @@ print(bias_plot)
 dev.off()
 
 
-# bias plot for the Entsorgungsgebiete
+# bias plot for the Entsorgungsgebiete ## delete for github!
 val_data <- setDT(read.xlsx("data/Validation_data.xlsx"))
 val_data <- val_data[, .(NAME, Value, Code)]
 setnames(val_data, "gridcode", "NAME", skip_absent = T)
 
 
-res_data <- setDT(read.xlsx("data_NOTREAD/intermediate_results/Entsorgung_EW_dwf125_lnerror_2021_2022_2023_2024_Jun24.xlsx", sheet = "results_per_gridcode"))
-#res_data2 <- setDT(read.xlsx("data_NOTREAD/intermediate_results/Entsorgungsgebiete_EUROSTAT_extractedCS_2021_2022_2023_2024_Jun24.xlsx", sheet = "results_per_gridcode"))
-
-#res_data[gridcode == "EMREG_BE_Abwasserverband Region Hohenems"]
-
-setnames(res_data, "gridcode", "NAME")
-res_data <- res_data[ , .(NAME, year, total_overflow_Mm3y)]
-res_data$NAME[res_data$NAME == "ebswien kläranlage & tierservice"] <- "Wien Kanal"
+res_data <- setDT(read.xlsx("data_NOTREAD/intermediate_results/Entsorgungsgebiete_Eurostat_manualCS_HEF_manualpop_2021_2022_2023_2024_Jun24.xlsx", sheet = "results_per_gridcode"))
+res_data <- res_data[, c("year", "total_overflow_Mm3y", "gridcode")]
+res_data$gridcode[res_data$gridcode == "ebswien kläranlage & tierservice"] <- "Wien Kanal"
 # combine ARA Pulkau and ARA Schrattenthal for the validation data
-temp <- res_data[NAME == "ARA Pulkau" | NAME == "ARA Schrattenthal",
+temp <- res_data[gridcode == "ARA Pulkau" | gridcode == "ARA Schrattenthal",
          .(total_overflow_Mm3y = sum(total_overflow_Mm3y)), by = year]
-temp$NAME <- "Gemeindeabwasserverband- Pulkau-Schrattenthal-Pillersdorf"
+temp$gridcode <- "Gemeindeabwasserverband- Pulkau-Schrattenthal-Pillersdorf"
 res_data <- rbind(res_data, temp)
 res_data <- res_data[year < 2024]
-res_data <- res_data[, .(total_overflow_Mm3y = mean(total_overflow_Mm3y)), by = NAME]
+res_data <- res_data[, .(total_overflow_Mm3y = mean(total_overflow_Mm3y)), by = gridcode]
 
-plot_data <- merge(val_data, res_data, by = "NAME")
+plot_data <- merge(val_data, res_data, by.x = "NAME", by.y = "gridcode")
 plot_data[, bias := (total_overflow_Mm3y * 10^6 - Value) / Value * 100]
 
 bias_plot <- ggplot(plot_data, aes(x = Code, y = bias)) +#, color = year
@@ -317,7 +345,7 @@ bias_plot <- ggplot(plot_data, aes(x = Code, y = bias)) +#, color = year
     geom_segment(aes(x = Code, xend = Code, y = 0, yend = bias),
                  color = "grey50") +
     geom_point(size = 3) + #, alpha = 0.7
-    scale_y_continuous(limits = c(-123,123), breaks = seq(-120, 120, #seq(floor(min(plot_data$bias)/20)*20,
+    scale_y_continuous(limits = c(-100,100), breaks = seq(-100, 100, #seq(floor(min(plot_data$bias)/20)*20,
                                     #ceiling(max(plot_data$bias)/20)*20,
                                     by = 10),
                        labels = function(x) paste0(x, "%")) +
@@ -327,31 +355,13 @@ bias_plot <- ggplot(plot_data, aes(x = Code, y = bias)) +#, color = year
 #bias_plot
 
 #pdf("bias_Entsorgung_EUROSTAT_wo2024_extracted_CS.pdf", width = 9, height = 10)
-pdf("bias_Entsorgung_EUROSTAT_wo2024_manual_CS_MEAN_woHEF_EW_125_lnerror.pdf", width = 8, height = 6)
+pdf("bias_Entsorgung_EUROSTAT_wo2024_manual_CS_MEAN_woHEF_EW_125_to100.pdf", width = 7, height = 4)
 print(bias_plot)
 dev.off()
 
 
 
-
-# check regions with few inhabitants
-
-austria_res_temp <- setDT(read.xlsx(file.path(path_intermediate_res, "Austria_default_dn302010_2011_2012_2013_2014_2015_2016_Mar24.xlsx"), sheet = 2))
-austria_prec_add <- setDT(read.xlsx(file.path(path_intermediate_res, "Austria_default_dn302010_2011_2012_2013_2014_2015_2016_Mar24.xlsx"), sheet = 1))
-austria_res_temp <- merge.data.table(austria_res_temp, austria_prec_add[, c("gridcode", "mean_annual_prec")], by = "gridcode")
-
-
-# ggplot(data = austria_res_temp, aes(x = population, y = total_overflow_Mm3y)) +
-#     scale_x_log10() +
-#     geom_point() +
-#     theme_bw()
-#
-# ggplot(data = austria_res_temp, aes(x = mean_annual_prec/population, y = total_overflow_Mm3y)) +
-#     geom_point() +
-#     theme_bw()
-
-
-# events plots
+# events plots -----------------------------------------------------------------
 res_event <- setDT(read.xlsx(path_out, sheet = "event_metrics_yearly"))
 res_nr_events <- rbind(
     data.table(year = res_event$year,
@@ -401,8 +411,7 @@ dev.off()
 
 
 
-# sensitivity analysis plots
-#file_list <- list.files(file.path(path_intermediate_res, "G_sensitivity_param_plots"), pattern = paste0(datum, "\\.xlsx$"), full.names = TRUE)
+# sensitivity analysis plots ---------------------------------------------------
 file_list <- list.files(file.path(path_intermediate_res, "G_sensitivity_param_plots"), pattern = paste0(datum, "\\.xlsx$"), full.names = TRUE)
 
 sens_files <- file_list[grepl(paste0(validation_code,"_sensitivity"), basename(file_list))]
@@ -433,11 +442,7 @@ p_sens <- ggplot(data = sens_dt, aes(x = param_val, y = cso_val)) +
     labs(x = "Precipitation change factor ")
 p_sens
 
-#saveRDS(sens_dt, file.path(path_intermediate_res, "G_sensitivity_param_plots", paste0(validation_code ,"_", param_nam,"_sensitivity_plot.rds")))
 saveRDS(sens_dt, file.path(path_intermediate_res, "E_sensitivity_param_plots", paste0(validation_code ,"_", param_nam,"_sensitivity_plot.rds")))
-
-
-
 
 
 # arrange plot of all 6 params
@@ -487,45 +492,7 @@ p_sens <- ggplot(data = combined_dt, aes(x = param_val, y = cso_val)) +
 
 p_sens
 
-#pdf(file.path(path_intermediate_res, "G_sensitivity_param_plots", "G_param_plot.pdf"), width = 9, height = 12)
 pdf(file.path(path_intermediate_res, "G_sensitivity_param_plots", "G_param_plot_prec.pdf"), width = 6, height = 5)
 
 print(p_sens)
 dev.off()
-
-
-
-# k1_fun <- function(qdwf, dn, W1){
-#     return(qdwf*dn/W1)
-# }
-#
-#
-# k1_c <- c()
-# for (dn_temp in seq(3,30,1)){
-#     k1_c <- c(dn_c, k1_fun(0.0684449, dn_temp, 5))
-# }
-
-qdwf <- 0.0684449
-
-qdwf*5/5
-
-
-qdwf_pop <- (manual_pop/1.4251) * 0.21 /8/1000
-
-qdwf_pop*30/5
-
-dn3 <- readRDS(file.path(path_intermediate_res, paste0("data_dn", 3)))
-dn4 <- readRDS(file.path(path_intermediate_res, paste0("E_data_dn", 4)))
-dn5 <- readRDS(file.path(path_intermediate_res, paste0("E_data_dn", 5)))
-dn6 <- readRDS(file.path(path_intermediate_res, paste0("E_data_dn", 6)))
-dn8 <- readRDS(file.path(path_intermediate_res, paste0("E_data_dn", 8)))
-dn11 <- readRDS(file.path(path_intermediate_res, paste0("E_data_dn", 11)))
-
-
-plot_G_dwf <- readRDS("C:\\Users\\simulation\\bkroyer\\git_clone\\cso-modell-upper-danube\\data_NOTREAD\\intermediate_results\\G_DWF per capita_sensitivity_plot.rds")
-
-
-dt12 <- readRDS(file.path(path_intermediate_res, paste0("data_dt", 12)))
-dt14 <- readRDS(file.path(path_intermediate_res, paste0("data_dt", 14)))
-dt15 <- readRDS(file.path(path_intermediate_res, paste0("data_dt", 15)))
-dt16 <- readRDS(file.path(path_intermediate_res, paste0("data_dt", 16)))

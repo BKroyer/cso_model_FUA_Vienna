@@ -36,18 +36,6 @@ if (!validation_region){
     sum(pop_dt$population)
 
 
-    # change pop to validation data
-    val_data <- setDT(read.xlsx("data/Validation_data.xlsx"))
-    val_data$NAME[val_data$NAME == "Wien Kanal"] <- "ebswien kläranlage & tierservice"
-    duplrow <- val_data[1]
-    duplrow$NAME <- "ARA Pulkau"
-    val_data[1, NAME := "ARA Schrattenthal"]
-    val_data <- rbind(val_data, duplrow)
-    setnames(val_data, "NAME", "settlement_id")
-
-    pop_dt[val_data, population := i.EW, on = "settlement_id"] # i.EW or i.Pop2018_2023
-    setnames(val_data, "settlement_id", "gridcode")
-
     # get the design population data
     if (!is.na(path_design_population)) { # use the design population and utilisation rate
         design_pop_dt <- read.xlsx(path_design_population)
@@ -80,15 +68,6 @@ if (!validation_region){
     share_dt <- share_dt[.(gridcode_to_process)]
     setkeyv(share_dt, gridcode_nam)
     share_dt[share_served_by_CS>1, share_served_by_CS := share_served_by_CS/100]
-
-
-    # change CS share to validation data
-    # but not for ... E, F ,J ?
-    val_data <- val_data[!(Code %in% c("H", "E", "F"))]
-    setnames(val_data, "gridcode", gridcode_nam)
-    share_dt[val_data, share_served_by_CS := i.CS, on = gridcode_nam]
-
-
 
 
     # custom CS share
@@ -152,48 +131,6 @@ if (!validation_region){
         print(paste0("Warning: Manual CS of ", manual_CS," is used!"))
     }
 }
-
-# ## added mean stats for paper
-# urb_df <- data.frame(values(urb_3035)[gridcode_nam], expanse(urb_3035, unit = "km"))
-# setnames(urb_df, c(gridcode_nam, "area"))
-# urb_df$weight <- urb_df$area/sum(urb_df$area)
-#
-# urb_df <- merge(urb_df, imp_dt, by = gridcode_nam)
-# urb_df <- merge(urb_df, share_dt, by = gridcode_nam)
-#
-# urb_df$factor_imp <- urb_df$imp_area_km2/urb_df$area
-#
-# years <- 2021:2024
-# prec_data <- list()
-#
-# for (year in years) {
-#     year_temp <- as.character(year)
-#     file_path <- file.path(
-#         path_input,
-#         paste0(filenam_prec_data_base, year_temp, ".rds"))
-#     prec_yr <- readRDS(file_path)
-#     setDT(prec_yr)
-#     prec_yr <- prec_yr[, .(annual_prec = sum(precipitation_mm)), by = mget(gridcode_nam)]
-#     setnames(prec_yr, "annual_prec", paste0("prec_", year))
-#     prec_data[[year_temp]] <- prec_yr
-# }
-# prec_all <- Reduce(function(x, y) merge(x, y, by = gridcode_nam, all = TRUE), prec_data)
-#
-# urb_df <- merge(urb_df, prec_all)
-#
-# # weight by imp area per year (and not per year for static)
-# urb_df$weighted_imp <- urb_df$factor_imp * urb_df$weight
-# sum(urb_df$weighted_imp) # smaller settlements: 14% imp, 1523 total; FUA: 4.4% imp, 930 total, WWTP: 2.7% imp, 1937 total
-# urb_df$weighted_share <- urb_df$share_served_by_CS * urb_df$weight
-# sum(urb_df$weighted_share) # smaller settlements: 0.36 share; FUA: 0.41; WWTP: 0.35
-# for (year in years) {
-#     col_name <- paste0("prec_", year)
-#     urb_df[[col_name]] <- urb_df[[col_name]] * urb_df$weight
-#     print(sum(urb_df[[col_name]]))
-#     # smaller settlements: 935.3302, 876.2439, 1178.634, 1115.335 --> mean: 1026
-#     # FUAs: 801.0459, 750.744, 1019.758, 970.1179 --> mean: 885
-#     # WWTPs: 997.0578, 928.9637, 1254.07, 1183.379 --> mean: 1090.868
-# }
 
 rm(urb_3035, urb_3035_cropped_to_aoi, urb_4326, aoi_3035, aoi_buffered_epsg4326, aoi_epsg3035)
 
@@ -422,7 +359,7 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
 
         }
 
-        print(paste0("The total overflow is ", summarized_stats$total_overflow_Mm3y, " Mm³"))
+        print(paste0("The total overflow is ", summarized_stats$total_overflow_Mm3y, " Mm³ (year ", year_temp,")"))
 
         rm(dt_results)
         gc()
@@ -540,15 +477,12 @@ for (i in c(1:length(area_of_interest_name))){ # if not sensitivity analysis, on
         gc()
 
 
-        if (length(gridcode_to_process) > 2 | validation_region == TRUE){
-            results_nam <- paste0(area_of_interest_name_temp, paste0("_", datum), ".xlsx")
+        results_nam <- paste0(area_of_interest_name_temp, paste0("_", datum), ".xlsx")
 
-        }else{
-            results_nam <- paste0(paste(gridcode_to_process, collapse = "_"), paste0("_", datum), ".xlsx")
-
-        }
 
     }
+
+    print("The warning messages concerning NA can be ignored unless there is an additional message saying they're not okay.")
 
     path_out <- file.path(path_intermediate_res, results_nam)
     saveWorkbook(wb, path_out, overwrite = TRUE)

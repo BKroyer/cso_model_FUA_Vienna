@@ -44,8 +44,6 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
     # precipitation time series
     prec  <- prec_dt[gridcode == gridcode_temp]
 
-    t1 <- Sys.time()
-
     used_vals <- cbind(
         p,
         population = as.numeric(pop/share$share_served_by_CS),
@@ -59,16 +57,15 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
     if (imp$imp_area_km2 == 0){ # skipping settlements with 0 km² impervious surface
         single_params <- cbind(data.table(gridcode = gridcode_temp), used_vals)
         single_row <- data.table(year = year_temp, gridcode = gridcode_temp, imp_area_0 = TRUE)
-        runtime <- 0
+        #runtime <- 0
         return(list(
             gridcode = gridcode_temp,
-            runtime_secs = runtime,
+            #runtime_secs = runtime,
             single_params = single_params,
             single_row = single_row
         ))
     }
 
-    # Rprof("cso_profile.out", line.profiling = TRUE)
 
     # run model
     res <- cso_model(
@@ -89,15 +86,6 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
         ln_A_B = ln_A_B
     )
 
-    #print("Number of time steps with scenario b:")
-    #print(table(res$scenario))
-
-    # Rprof(NULL)
-    # summaryRprof("cso_profile.out", lines = "show")
-
-    t2 <- Sys.time()
-    runtime <- as.numeric(difftime(t2, t1, units = "secs"))
-
     min_time <- min(prec$time) #get(min_time)
     max_time <- max(prec$time) #get(max_time)
 
@@ -115,12 +103,11 @@ run_cso_for_single_gridcode <- function(gridcode_temp,
 
     # add year and gridcode to single row
     gridcode_dt <- data.table(year = year_temp, gridcode = gridcode_temp)
-    # pop_temp <- data.table(population = single_params$population)
     single_row <- cbind(gridcode_dt, single_row)
     event_res <- cbind(gridcode_dt, event_res)
     return(list(
         gridcode = gridcode_temp,
-        runtime_secs = runtime,
+        #runtime_secs = runtime,
         single_params = single_params,
         single_row = single_row,
         event_res = event_res

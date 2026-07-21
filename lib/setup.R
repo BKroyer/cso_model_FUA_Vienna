@@ -17,15 +17,9 @@ sensitivity_analysis <- FALSE # if TRUE, adjust settings at bottom of this scrip
 path_intermediate_res <- file.path("data_NOTREAD", "intermediate_results") # for the results and processed input data
 path_input <- file.path("data")
 path_raw_nc <- file.path(path_intermediate_res, "nc_raw") # for the precipitation data extraction for settlements
-path_cropped_nc <- file.path(path_input, "nc_cropped_AUT") # for the precipitation data extraction for settlements
+path_cropped_nc <- "C:/Users/bkroyer/cso-modell-upper-danube/data/nc_cropped_AUT"#file.path(path_input, "nc_cropped_AUT") # for the precipitation data extraction for settlements
 path_design_population <- NA # either the path to the data with gridcodes or NA
 # if design population is given, adjust dn and dt to match design population
-
-# Paths to preprocessed data
-filenam_prec_data_base <- paste0("precipitation_ts_AUT_WWTP") # the year is added in file 04
-filenam_imp_data <- ifelse(time_period_of_interest == "2010_2016", "impervious_area_2015_AUT_FUA.rds", "impervious_area_2021_AUT_WWTP.rds")
-filenam_cs_data <- "share_CS_wwtp.rds"
-filenam_pop_data <- ifelse(time_period_of_interest == "2010_2016", "population_2015_AUT.rds", "population_2021_AUT_WWTP.rds")
 
 
 # Time period of interest (Used in precipitation data extraction & mask when applying model) -------------------------------------
@@ -43,15 +37,25 @@ current_years_num <- seq(yr_begin, yr_end)
 current_years <- as.character(current_years_num)
 nam <- paste(current_years, collapse = "_")
 
+
+# Paths to preprocessed data -----------------------------------------------------
+
+path_nam_preprocess <- "_FUA_Vienna" # to get consistent names in the pre-processed data
+filenam_prec_data_base <- paste0("precipitation_ts", path_nam_preprocess) # the year is added in file 04
+filenam_imp_data <- ifelse(time_period_of_interest == "2010_2016", paste0("impervious_area_2015",path_nam_preprocess,".rds"), paste0("impervious_area_2021",path_nam_preprocess,".rds"))
+filenam_cs_data <- paste0("share_CS",path_nam_preprocess,".rds")
+filenam_pop_data <- ifelse(time_period_of_interest == "2010_2016", paste0("population_2015",path_nam_preprocess,".rds"), paste0("population_2021",path_nam_preprocess,".rds"))
+
+
 # Area of interest ---------------------------------------------------------------------------------------------------------------
 
 area_of_interest <- "data/AUT_border.shp"
-area_of_interest_name <- paste0("AUT_smaller_settlements_", nam)
+area_of_interest_name <- paste0("FUA_vienna_test_", nam)
 
 
 # relevant for the pre-processing: precipitation, imperviousness, population and CS share data will be extracted for the specified settlements
-settlements <- "data/agglo_fixed_geometries.shp"
-gridcode_nam <- "gridcode" # the name column of the spatial units, will be used for naming in the preprocessing as well
+settlements <- "data/FUA_vienna.shp"
+gridcode_nam <- "eFUA_name" # the name column of the spatial units, will be used for naming in the preprocessing as well
 
 
 # finds factor to scale results for validation regions crossing border of AoI
@@ -113,7 +117,7 @@ if (use_default_params){
     W2 <- 2
 }
 
-dwf_per_capita <- 0.125
+dwf_per_capita <- 0.2
 
 
 if (!validation_region){ # for validation regions: Cs share and population from data shared and Emreg

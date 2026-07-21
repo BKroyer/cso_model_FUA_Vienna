@@ -15,18 +15,20 @@ urb_area <- expanse(urb_3035, unit = "km")
 
 # Impervious area --------------------------------------------------------------
 
-imp_input <- rast("data/imp2021_AoI_incl_AUT.tif")
+imp_input <- rast("C:/Users/bkroyer/cso-modell-upper-danube/data/imp2021_AoI_incl_AUT.tif")
 urb_proj_imp <- project(urb_3035, imp_input)
 imp_urb <- exact_extract(imp_input, sf::st_as_sf(urb_proj_imp), fun = "mean", append_cols = gridcode_nam)
-
-
+imp <- data.table(settlement_id = imp_urb[, gridcode_nam], mean_imperviousness = imp_urb$mean/100, settlement_area = urb_area)
+setnames(imp, "settlement_id", gridcode_nam)
+imp[, imp_area_km2 := settlement_area * mean_imperviousness]
+saveRDS(imp[, .SD, .SDcols = c(gridcode_nam, "imp_area_km2")], file.path(path_intermediate_res, paste0("impervious_area_2021",path_nam_preprocess,".rds")))
 
 
 
 
 # population -------------------------------------------------------------------
 
-popdens_raw <- rast("data/ESTAT_OBS-VALUE-T_2021_V2.tiff") # T means total population; resolution 1km²x1km²
+popdens_raw <- rast("C:/Users/bkroyer/cso-modell-upper-danube/data/ESTAT_OBS-VALUE-T_2021_V2.tiff") # T means total population; resolution 1km²x1km²
 urb_proj_pop <- project(urb_3035, popdens_raw)
 pop_urb <- exact_extract(popdens_raw, sf::st_as_sf(urb_proj_pop), fun = "sum", append_cols = gridcode_nam)
 pop <- data.table(
@@ -35,8 +37,12 @@ pop <- data.table(
 )
 setnames(pop, c(gridcode_nam, "population"))
 
-saveRDS(pop[, .SD, .SDcols = c(gridcode_nam, "population")], file.path(path_intermediate_res, "population_2021_AUT_FUA.rds"))
+saveRDS(pop[, .SD, .SDcols = c(gridcode_nam, "population")], file.path(path_intermediate_res, paste0("population_2021",path_nam_preprocess,".rds")))
 
+
+
+
+# not used in the working example
 # get mean of 2011 and 2018 dataset for a 2015 equivalent
 # both 2011 and 2018 dataset intersected with smaller settlements in QGIS
 pop_2011 <- vect(file.path(path_intermediate_res, "pop_2011_on_smaller_settlements", "pop_2011_AUT_w_gridcode.shp"))
@@ -62,14 +68,14 @@ pop_2015 <- merge(pop_2011_dt, pop_2018_dt, by = "gridcode")
 pop_2015$TOT_P_2015 <- rowMeans(pop_2015[, c("POP_2018", "POP_2011")])
 pop_2015 <- data.table(settlement_id = pop_2015$gridcode, population = pop_2015$TOT_P_2015)
 
-saveRDS(pop_2015[,.(settlement_id, population)], file.path(path_intermediate_res, "population_2015.rds")) # not for validatation region, requires pre-computing of 2011 and 2018 data in QGIS again
+saveRDS(pop_2015[,.(settlement_id, population)], file.path(path_intermediate_res, paste0("population_2015",path_nam_preprocess,".rds"))) # not for validatation region, requires pre-computing of 2011 and 2018 data in QGIS again
 
 
 
 
 # share of CS ------------------------------------------------------------------
 
-share_CS_input <- vect(file.path("data", "combined.gpkg"))
+share_CS_input <- vect(file.path("C:/Users/bkroyer/cso-modell-upper-danube/data", "combined.gpkg"))
 share_CS_input$share_num[share_CS_input$CNTR_CODE. == "CZ"] <- 0.7 # updating CZ data to 70\%, see Cools et al (2016)
 urb_proj_share_CS <- project(urb_3035, share_CS_input)
 
@@ -96,6 +102,6 @@ share_CS[share_served_by_CS >1, share_served_by_CS := share_served_by_CS/100]
 
 
 
-saveRDS(share_CS, file.path(path_intermediate_res, "share_CS_AUT_FUA.rds"))
+saveRDS(share_CS, file.path(path_intermediate_res, paste0("share_CS",path_nam_preprocess,".rds")))
 
 

@@ -30,7 +30,7 @@ extract_prec_year <- function(path, year_str, nc_files_cropped, nr_timesteps = 8
 
 
 # loop to save extracted prec time series as rds for every specified year separately
-for (current_years in as.character(c(2022:2024))){
+for (current_years in as.character(c(2021:2024))){
     nc_files_yr <- extract_prec_year(path_cropped_nc, current_years, nc_files_cropped)
 
     precip_rast <- rast(nc_files_yr)
@@ -70,10 +70,7 @@ for (current_years in as.character(c(2022:2024))){
     precip_dt[, timestamp:=NULL]
 
     # Save data table as RDS as this saves much space
-    #saveRDS(precip_dt, file.path(path_intermediate_res, paste0("precipitation_ts_settlements_", current_years,".rds")))
-
-
-    saveRDS(precip_dt, file.path(path_intermediate_res, paste0("precipitation_ts_AUT_FUA", current_years,".rds")))
+    saveRDS(precip_dt, file.path(path_intermediate_res, paste0("precipitation_ts", path_nam_preprocess, current_years,".rds")))
 
 }
 
